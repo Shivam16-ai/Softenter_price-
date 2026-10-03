@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="560" height="120" fill="none">
+  <defs>
+    <!-- Metallic Chrome Silver Gradients -->
+    <linearGradient id="chromeSilver" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="25%" stop-color="#E2E8F0" />
+      <stop offset="48%" stop-color="#FFFFFF" />
+      <stop offset="55%" stop-color="#94A3B8" />
+      <stop offset="78%" stop-color="#CBD5E1" />
+      <stop offset="100%" stop-color="#64748B" />
+    </linearGradient>
+
+    <!-- Vibrant Glossy Orange Gradients -->
+    <linearGradient id="vibrantOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB366" />
+      <stop offset="28%" stop-color="#FF6600" />
+      <stop offset="55%" stop-color="#FF8533" />
+      <stop offset="85%" stop-color="#E64A00" />
+      <stop offset="100%" stop-color="#B33600" />
+    </linearGradient>
+
+    <!-- Metallic Specular Shine Strip -->
+    <linearGradient id="specularShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8" />
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.2" />
+      <stop offset="50%" stop-color="#000000" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.5" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter for Luxury Depth -->
+    <filter id="cinematicGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.6"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#FF5500" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Logomark Emblem: Speed Chevron & Hexagonal Route Core -->
+  <g transform="translate(16, 14)" filter="url(#cinematicGlow)">
+    <!-- Outer Shield / Hex Chassis in Metallic Silver -->
+    <path d="M46 6 L82 26 L82 66 L46 86 L10 66 L10 26 Z" 
+          fill="url(#chromeSilver)" 
+          stroke="#FFFFFF" 
+          stroke-width="1.5" 
+          stroke-linejoin="round"/>
+    
+    <!-- Dark Inset Facet -->
+    <path d="M46 13 L75 30 L75 62 L46 79 L17 62 L17 30 Z" 
+          fill="#0B0E17"/>
+
+    <!-- High-Velocity Dynamic Arrow Wings in Vibrant Orange -->
+    <path d="M28 46 L46 28 L64 46 L55 55 L46 46 L37 55 Z" 
+          fill="url(#vibrantOrange)"/>
+    <path d="M33 58 L46 45 L59 58 L52 65 L46 59 L40 65 Z" 
+          fill="url(#vibrantOrange)" 
+          opacity="0.9"/>
+    
+    <!-- Dynamic Speed Hash Lines -->
+    <polygon points="12,23 38,23 30,28 6,28" fill="url(#vibrantOrange)" opacity="0.85"/>
+    <polygon points="8,70 30,70 24,75 4,75" fill="url(#chromeSilver)" opacity="0.6"/>
+  </g>
+
+  <!-- Brand Typography: SWIFTRoute -->
+  <g transform="translate(122, 66)">
+    <!-- "SWIFT" in Bold Metallic Silver -->
+    <text x="0" y="0" 
+          font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-weight="900" 
+          font-size="48" 
+          letter-spacing="-0.03em" 
+          fill="url(#chromeSilver)" 
+          filter="url(#cinematicGlow)">SWIFT</text>
+    
+    <!-- "Route" in Vibrant Glossy Orange -->
+    <text x="172" y="0" 
+          font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-weight="900" 
+          font-size="48" 
+          letter-spacing="-0.02em" 
+          fill="url(#vibrantOrange)" 
+          filter="url(#cinematicGlow)">Route</text>
+
+    <!-- Global Logistics Pulse Orb -->
+    <circle cx="330" cy="-34" r="4.5" fill="#FF5500"/>
+    <circle cx="330" cy="-34" r="7.5" stroke="#FF8533" stroke-width="1.2" opacity="0.75"/>
+  </g>
+
+  <!-- Tagline: ENTERPRISE LOGISTICS -->
+  <g transform="translate(124, 93)">
+    <text x="0" y="0" 
+          font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" 
+          font-weight="700" 
+          font-size="12" 
+          letter-spacing="0.32em" 
+          fill="#94A3B8">ENTERPRISE LOGISTICS</text>
+    
+    <!-- Subtle Precision Line Divider -->
+    <line x1="285" y1="-4" x2="400" y2="-4" stroke="url(#vibrantOrange)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+  </g>
+</svg>

@@ -1,0 +1,1523 @@
+// SwiftRoute Enterprise Courier & Parcel Management System
+// Prisma Database Architecture - Production Specification (PostgreSQL / MySQL)
+// Fully Normalized (3NF) with High-Concurrency Partitioning & Indexing
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// ENUMS - DOMAIN TYPES & FINITE STATE MACHINES
+// =============================================================================
+
+enum UserRoleType {
+  SUPER_ADMIN
+  ADMIN
+  DISPATCHER
+  COURIER_AGENT
+  CUSTOMER
+  HUB_MANAGER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  DEACTIVATED
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  COMMERCIAL_SME
+  ENTERPRISE_CORPORATE
+}
+
+enum AgentEmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  PROBATION
+  SUSPENDED
+  TERMINATED
+}
+
+enum VehicleType {
+  MOTORCYCLE
+  ELECTRIC_SCOOTER
+  SEDAN
+  CARGO_VAN
+  HEAVY_BOX_TRUCK
+  SEMI_TRAILER
+  BICYCLE
+}
+
+enum AgentAvailabilityStatus {
+  AVAILABLE
+  ON_DELIVERY_RUN
+  BUSY
+  ON_BREAK
+  OFF_DUTY
+}
+
+enum BranchType {
+  HEADQUARTERS
+  METRO_SORTING_HUB
+  REGIONAL_DISTRIBUTION_DEPOT
+  LOCAL_BRANCH
+  LOCKER_KIOSK
+}
+
+enum CheckpointType {
+  ORIGIN_FACILITY
+  TRANSIT_HUB_SCAN
+  WEIGH_INSPECTION
+  CUSTOMS_BORDER
+  SORTING_CENTER
+  DESTINATION_DEPOT
+  OUT_FOR_DELIVERY_DISPATCH
+  RECIPIENT_LOCATION
+}
+
+enum ParcelType {
+  STANDARD
+  EXPRESS
+  FRAGILE
+  HEAVY_FREIGHT
+  DOCUMENT
+  COLD_CHAIN
+  HAZARDOUS_MATERIAL
+}
+
+enum ParcelStatus {
+  PENDING
+  ASSIGNED
+  PICKED_UP
+  IN_SORTING
+  IN_TRANSIT
+  ARRIVED_AT_HUB
+  OUT_FOR_DELIVERY
+  DELIVERED
+  ATTEMPTED_DELIVERY
+  FAILED
+  RETURNED_TO_SENDER
+  CANCELLED
+  ON_HOLD
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  DECLINED
+  TRANSFERRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+  WAIVED
+}
+
+enum PaymentTerms {
+  PREPAID
+  CASH_ON_DELIVERY
+  CREDIT_LINE_MONTHLY
+  THIRD_PARTY_CONSIGNEE
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CASH_ON_DELIVERY
+  DIGITAL_WALLET
+  STRIPE
+  PAYPAL
+  CORPORATE_ACCOUNT
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  AUTHORIZED
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum TransactionType {
+  CHARGE
+  REFUND
+  ADJUSTMENT
+  REVERSAL
+  PAYOUT
+  FEE
+}
+
+enum TransactionRecordStatus {
+  SUCCESS
+  PENDING
+  FAILED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  VOID
+  CANCELLED
+}
+
+enum LineItemType {
+  BASE_SHIPPING
+  WEIGHT_SURCHARGE
+  EXPRESS_SURCHARGE
+  FRAGILE_HANDLING
+  FUEL_SURCHARGE
+  INSURANCE_PREMIUM
+  CUSTOMS_DUTY
+  DISCOUNT
+  TAX
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH_DEVICE
+  WEBHOOK
+}
+
+enum NotificationType {
+  PARCEL_BOOKED
+  STATUS_UPDATE
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  PAYMENT_SUCCESS
+  INVOICE_GENERATED
+  AGENT_ASSIGNED
+  SECURITY_ALERT
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum TicketCategory {
+  DELAYED_DELIVERY
+  DAMAGED_PARCEL
+  LOST_SHIPMENT
+  BILLING_DISPUTE
+  ADDRESS_CORRECTION
+  SERVICE_COMPLAINT
+  GENERAL_INQUIRY
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum AuditActionType {
+  CREATE
+  UPDATE
+  DELETE
+  ACCESS
+  PERMISSION_CHANGE
+  STATUS_CHANGE
+  AUTHENTICATION
+  CONFIG_CHANGE
+}
+
+enum AuditSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SettingDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+enum SettingCategory {
+  GENERAL
+  PRICING
+  LOGISTICS
+  NOTIFICATIONS
+  SECURITY
+  SYSTEM
+}
+
+enum RecipientProofRelationship {
+  SELF
+  FAMILY_MEMBER
+  COLLEAGUE
+  SECURITY_GUARD
+  MAILROOM_CLERK
+  NEIGHBOR
+  AUTHORIZED_REPRESENTATIVE
+}
+
+// =============================================================================
+// MODULE 1: AUTHENTICATION, USERS & RBAC PERMISSIONS
+// =============================================================================
+
+model User {
+  id                  String     @id @default(cuid())
+  email               String     @unique @db.VarChar(255)
+  passwordHash        String     @db.VarChar(255)
+  fullName            String     @db.VarChar(120)
+  phone               String     @db.VarChar(30)
+  address             String?    @db.VarChar(255)
+  avatarUrl           String?    @db.VarChar(500)
+  status              UserStatus @default(ACTIVE)
+  roleId              String
+  isEmailVerified     Boolean    @default(false)
+  twoFactorEnabled    Boolean    @default(false)
+  twoFactorSecret     String?    @db.VarChar(255)
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int        @default(0)
+  lockoutUntil        DateTime?
+  deletedAt           DateTime? // Soft delete support
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  // RBAC Relation
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  // Profiles (Specialized 3NF Subtypes)
+  customerProfile      Customer?
+  deliveryAgentProfile DeliveryAgent?
+
+  // Authentication & Security Subsystems
+  sessions       UserSession[]
+  passwordResets PasswordReset[]
+
+  // Activity & Audits
+  activityLogs ActivityLog[]
+  auditLogs    AuditLog[]    @relation("AuditActionUser")
+
+  // Parcel Operations
+  createdParcels Parcel[]        @relation("ParcelSender")
+  verifiedProofs DeliveryProof[] @relation("AdminVerifier")
+
+  // Billing & Support
+  invoicesBilled          Invoice[]                @relation("BilledUser")
+  paymentsMade            Payment[]                @relation("PayerUser")
+  createdTickets          SupportTicket[]          @relation("TicketCustomer")
+  assignedTickets         SupportTicket[]          @relation("TicketAssignee")
+  ticketMessages          TicketMessage[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  settingsUpdated         SystemSetting[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique @db.VarChar(60)
+  code        UserRoleType @unique
+  description String?      @db.VarChar(255)
+  isSystem    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique @db.VarChar(100) // e.g. "parcels:create", "dispatch:manage"
+  module      String   @db.VarChar(60) // e.g. "PARCELS", "BILLING", "AGENTS"
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserSession {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique @db.VarChar(255)
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(500)
+  deviceInfo String?  @db.VarChar(120)
+  isValid    Boolean  @default(true)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isValid])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(255)
+  usedAt    DateTime?
+  expiresAt DateTime
+  ipAddress String?   @db.VarChar(45)
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_resets")
+}
+
+// =============================================================================
+// MODULE 2: CUSTOMER MANAGEMENT & ADDRESS BOOK (3NF)
+// =============================================================================
+
+model Customer {
+  id                    String       @id @default(cuid())
+  userId                String       @unique
+  accountType           CustomerType @default(INDIVIDUAL)
+  companyName           String?      @db.VarChar(150)
+  taxId                 String?      @db.VarChar(50) // EIN or VAT number
+  billingEmail          String?      @db.VarChar(255)
+  billingPhone          String?      @db.VarChar(30)
+  creditLimit           Decimal      @default(0.00) @db.Decimal(12, 2)
+  currentBalance        Decimal      @default(0.00) @db.Decimal(12, 2)
+  paymentTermsDays      Int          @default(0) // 0 = prepay, 30 = Net 30
+  customDiscountPercent Decimal      @default(0.00) @db.Decimal(5, 2)
+  deletedAt             DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses CustomerAddress[]
+  invoices  Invoice[]
+  parcels   Parcel[]
+
+  // Universal Order Hub Relations
+  externalAccounts      ExternalAccount[]
+  externalOrders        ExternalOrder[]
+  returnRequests        ReturnRequest[]
+  deliveryPreferences   DeliveryPreference[]
+  customerNotifications CustomerNotification[]
+
+  @@index([accountType])
+  @@index([companyName])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id                String    @id @default(cuid())
+  customerId        String
+  label             String    @db.VarChar(60) // "HQ Warehouse", "Dock 4", "Home"
+  contactPerson     String    @db.VarChar(100)
+  phoneNumber       String    @db.VarChar(30)
+  streetAddress1    String    @db.VarChar(200)
+  streetAddress2    String?   @db.VarChar(100)
+  city              String    @db.VarChar(100)
+  stateProvince     String    @db.VarChar(100)
+  postalCode        String    @db.VarChar(20)
+  countryCode       String    @default("US") @db.VarChar(3)
+  latitude          Decimal?  @db.Decimal(10, 7)
+  longitude         Decimal?  @db.Decimal(10, 7)
+  isDefaultPickup   Boolean   @default(false)
+  isDefaultDelivery Boolean   @default(false)
+  deliveryNotes     String?   @db.VarChar(255)
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([city, postalCode])
+  @@map("customer_addresses")
+}
+
+// =============================================================================
+// MODULE 3: DELIVERY AGENT & FLEET MANAGEMENT
+// =============================================================================
+
+model DeliveryAgent {
+  id                        String                @id @default(cuid())
+  userId                    String                @unique
+  employeeCode              String                @unique @db.VarChar(40) // AGT-SF-104
+  assignedBranchId          String?
+  assignedHubId             String?
+  licenseNumber             String?               @db.VarChar(60)
+  licenseExpiry             DateTime?
+  identityDocumentType      String?               @db.VarChar(50) // "PASSPORT", "DRIVERS_LICENSE"
+  identityDocumentNumber    String?               @db.VarChar(60)
+  emergencyContactName      String?               @db.VarChar(100)
+  emergencyContactPhone     String?               @db.VarChar(30)
+  rating                    Decimal               @default(5.00) @db.Decimal(3, 2)
+  totalDeliveriesCount      Int                   @default(0)
+  successfulDeliveriesCount Int                   @default(0)
+  failedDeliveriesCount     Int                   @default(0)
+  employmentStatus          AgentEmploymentStatus @default(ACTIVE)
+  deletedAt                 DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedBranch Branch? @relation(fields: [assignedBranchId], references: [id], onDelete: SetNull)
+  assignedHub    Hub?    @relation(fields: [assignedHubId], references: [id], onDelete: SetNull)
+
+  vehicles            AgentVehicle[]
+  availabilities      AgentAvailability[]
+  parcelAssignments   ParcelAssignment[]
+  deliveredProofs     DeliveryProof[]
+  assignedParcels     Parcel[]                 @relation("AssignedCourier")
+  recordedCheckpoints TrackingHistory[]        @relation("AgentRecordedCheckpoints")
+  performanceMetrics  AgentPerformanceMetric[]
+  returnPickups       ReturnRequest[]
+
+  @@index([employeeCode])
+  @@index([employmentStatus])
+  @@index([assignedBranchId])
+  @@index([assignedHubId])
+  @@map("delivery_agents")
+}
+
+model AgentVehicle {
+  id                    String      @id @default(cuid())
+  agentId               String
+  vehicleType           VehicleType @default(CARGO_VAN)
+  make                  String      @db.VarChar(60)
+  model                 String      @db.VarChar(60)
+  year                  Int
+  licensePlate          String      @unique @db.VarChar(30)
+  maxWeightCapacityKg   Decimal     @db.Decimal(8, 2)
+  maxVolumeCapacityCbm  Decimal     @db.Decimal(6, 2)
+  isActive              Boolean     @default(true)
+  insurancePolicyNumber String?     @db.VarChar(80)
+  insuranceExpiry       DateTime?
+  registrationExpiry    DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  agent       DeliveryAgent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  assignments ParcelAssignment[]
+
+  @@index([agentId])
+  @@index([licensePlate])
+  @@index([isActive])
+  @@map("agent_vehicles")
+}
+
+model AgentAvailability {
+  id                  String                  @id @default(cuid())
+  agentId             String
+  status              AgentAvailabilityStatus @default(AVAILABLE)
+  currentLatitude     Decimal?                @db.Decimal(10, 7)
+  currentLongitude    Decimal?                @db.Decimal(10, 7)
+  batteryLevelPercent Int?
+  lastLocationUpdate  DateTime?
+  shiftDate           DateTime                @db.Date
+  shiftStartTime      DateTime?
+  shiftEndTime        DateTime?
+  notes               String?                 @db.VarChar(255)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  agent DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, shiftDate])
+  @@index([status])
+  @@map("agent_availabilities")
+}
+
+// =============================================================================
+// MODULE 4: LOGISTICS INFRASTRUCTURE (BRANCHES, HUBS, ROUTES)
+// =============================================================================
+
+model Branch {
+  id             String     @id @default(cuid())
+  code           String     @unique @db.VarChar(40) // e.g. "BR-SFO-01"
+  name           String     @db.VarChar(120)
+  branchType     BranchType @default(LOCAL_BRANCH)
+  streetAddress  String     @db.VarChar(200)
+  city           String     @db.VarChar(100)
+  stateProvince  String     @db.VarChar(100)
+  postalCode     String     @db.VarChar(20)
+  countryCode    String     @default("US") @db.VarChar(3)
+  contactPhone   String     @db.VarChar(30)
+  contactEmail   String     @db.VarChar(255)
+  operatingHours String?    @db.VarChar(100)
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  hubs               Hub[]
+  deliveryAgents     DeliveryAgent[]
+  originParcels      Parcel[]        @relation("OriginBranchParcels")
+  destinationParcels Parcel[]        @relation("DestinationBranchParcels")
+  originRoutes       Route[]         @relation("RouteOriginBranch")
+  destinationRoutes  Route[]         @relation("RouteDestinationBranch")
+
+  @@index([code])
+  @@index([city, stateProvince])
+  @@index([isActive])
+  @@map("branches")
+}
+
+model Hub {
+  id                String   @id @default(cuid())
+  code              String   @unique @db.VarChar(40) // e.g. "HUB-BAY-01"
+  name              String   @db.VarChar(120)
+  branchId          String
+  address           String   @db.VarChar(200)
+  city              String   @db.VarChar(100)
+  stateProvince     String   @db.VarChar(100)
+  latitude          Decimal  @db.Decimal(10, 7)
+  longitude         Decimal  @db.Decimal(10, 7)
+  capacityVolumeCbm Decimal  @default(1000.00) @db.Decimal(8, 2)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branch            Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  deliveryAgents    DeliveryAgent[]
+  originRoutes      Route[]           @relation("RouteOriginHub")
+  destinationRoutes Route[]           @relation("RouteDestinationHub")
+  parcelsAtHub      Parcel[]          @relation("ParcelCurrentHub")
+  routeCheckpoints  RouteCheckpoint[]
+  trackingHistory   TrackingHistory[]
+
+  @@index([code])
+  @@index([branchId])
+  @@index([isActive])
+  @@map("hubs")
+}
+
+model Route {
+  id                      String   @id @default(cuid())
+  routeCode               String   @unique @db.VarChar(50) // "RT-SF-OAK-EXP"
+  name                    String   @db.VarChar(120)
+  originBranchId          String
+  destinationBranchId     String
+  originHubId             String?
+  destinationHubId        String?
+  standardDurationMinutes Int
+  distanceKm              Decimal  @db.Decimal(8, 2)
+  estimatedFuelCost       Decimal  @default(0.00) @db.Decimal(8, 2)
+  tollCost                Decimal  @default(0.00) @db.Decimal(8, 2)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  originBranch      Branch @relation("RouteOriginBranch", fields: [originBranchId], references: [id], onDelete: Restrict)
+  destinationBranch Branch @relation("RouteDestinationBranch", fields: [destinationBranchId], references: [id], onDelete: Restrict)
+  originHub         Hub?   @relation("RouteOriginHub", fields: [originHubId], references: [id], onDelete: SetNull)
+  destinationHub    Hub?   @relation("RouteDestinationHub", fields: [destinationHubId], references: [id], onDelete: SetNull)
+
+  checkpoints    RouteCheckpoint[]
+  parcelsOnRoute Parcel[]          @relation("ParcelAssignedRoute")
+
+  @@index([routeCode])
+  @@index([originBranchId, destinationBranchId])
+  @@index([isActive])
+  @@map("routes")
+}
+
+model RouteCheckpoint {
+  id                     String         @id @default(cuid())
+  routeId                String
+  sequenceOrder          Int
+  name                   String         @db.VarChar(120)
+  hubId                  String?
+  expectedTransitMinutes Int
+  mandatoryStop          Boolean        @default(false)
+  checkpointType         CheckpointType @default(TRANSIT_HUB_SCAN)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  hub   Hub?  @relation(fields: [hubId], references: [id], onDelete: SetNull)
+
+  @@unique([routeId, sequenceOrder])
+  @@index([routeId])
+  @@index([hubId])
+  @@map("route_checkpoints")
+}
+
+// =============================================================================
+// MODULE 5: PARCEL LIFECYCLE, PRICING CATEGORIES & TRACKING
+// =============================================================================
+
+model ParcelCategory {
+  id                      String   @id @default(cuid())
+  code                    String   @unique @db.VarChar(40) // STANDARD, EXPRESS, FRAGILE
+  name                    String   @db.VarChar(80)
+  description             String?  @db.VarChar(255)
+  baseRateMultiplier      Decimal  @default(1.00) @db.Decimal(4, 2)
+  handlingSurcharge       Decimal  @default(0.00) @db.Decimal(8, 2)
+  maxAllowedWeightKg      Decimal  @default(100.00) @db.Decimal(8, 2)
+  requiresSpecialHandling Boolean  @default(false)
+  insuranceRequired       Boolean  @default(false)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  parcels Parcel[]
+
+  @@index([code])
+  @@index([isActive])
+  @@map("parcel_categories")
+}
+
+model Parcel {
+  id             String       @id @default(cuid())
+  trackingNumber String       @unique @db.VarChar(50) // "SWIFT-2026-X82A"
+  waybillBarcode String?      @unique @db.VarChar(80)
+  senderId       String
+  customerId     String?
+  categoryId     String
+  parcelType     ParcelType   @default(STANDARD)
+  status         ParcelStatus @default(PENDING)
+
+  // Consignee & Route Addresses
+  senderName       String  @db.VarChar(120)
+  senderPhone      String  @db.VarChar(30)
+  senderEmail      String? @db.VarChar(255)
+  pickupAddress    String  @db.VarChar(255)
+  pickupCity       String? @db.VarChar(100)
+  pickupPostalCode String? @db.VarChar(20)
+
+  recipientName      String  @db.VarChar(120)
+  recipientPhone     String  @db.VarChar(30)
+  recipientEmail     String? @db.VarChar(255)
+  deliveryAddress    String  @db.VarChar(255)
+  deliveryCity       String? @db.VarChar(100)
+  deliveryPostalCode String? @db.VarChar(20)
+
+  // Logistics Nodes
+  originBranchId      String?
+  destinationBranchId String?
+  currentHubId        String?
+  assignedRouteId     String?
+  assignedAgentId     String?
+  assignedAt          DateTime?
+
+  // Physical Cargo Specification
+  weightKg           Decimal  @db.Decimal(8, 2)
+  lengthCm           Decimal? @db.Decimal(6, 2)
+  widthCm            Decimal? @db.Decimal(6, 2)
+  heightCm           Decimal? @db.Decimal(6, 2)
+  volumetricWeightKg Decimal? @db.Decimal(8, 2)
+  dimensionsText     String?  @db.VarChar(50) // e.g. "30x20x15 cm"
+  declaredValue      Decimal? @db.Decimal(10, 2)
+  isInsured          Boolean  @default(false)
+  insuranceAmount    Decimal? @default(0.00) @db.Decimal(10, 2)
+
+  // Pricing & Payment
+  baseShippingCost  Decimal       @default(0.00) @db.Decimal(10, 2)
+  surchargeAmount   Decimal       @default(0.00) @db.Decimal(10, 2)
+  taxAmount         Decimal       @default(0.00) @db.Decimal(10, 2)
+  totalShippingCost Decimal       @db.Decimal(10, 2)
+  paymentStatus     PaymentStatus @default(UNPAID)
+  paymentTerms      PaymentTerms  @default(PREPAID)
+
+  // Scheduling & Operational Instructions
+  estimatedDeliveryDate DateTime
+  actualDeliveryDate    DateTime?
+  pickupScheduledAt     DateTime?
+  pickedUpAt            DateTime?
+  specialInstructions   String?   @db.Text
+  fragileHandling       Boolean   @default(false)
+  signatureRequired     Boolean   @default(true)
+  temperatureControlled Boolean   @default(false)
+
+  // Soft Delete & Timestamps
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Foreign Key Relations
+  sender            User           @relation("ParcelSender", fields: [senderId], references: [id], onDelete: Restrict)
+  customer          Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  category          ParcelCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  assignedAgent     DeliveryAgent? @relation("AssignedCourier", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  originBranch      Branch?        @relation("OriginBranchParcels", fields: [originBranchId], references: [id], onDelete: SetNull)
+  destinationBranch Branch?        @relation("DestinationBranchParcels", fields: [destinationBranchId], references: [id], onDelete: SetNull)
+  currentHub        Hub?           @relation("ParcelCurrentHub", fields: [currentHubId], references: [id], onDelete: SetNull)
+  assignedRoute     Route?         @relation("ParcelAssignedRoute", fields: [assignedRouteId], references: [id], onDelete: SetNull)
+
+  // Subordinate Histories & Proofs
+  assignments     ParcelAssignment[]
+  trackingHistory TrackingHistory[]
+  deliveryProof   DeliveryProof?
+  invoices        Invoice[]
+  payments        Payment[]
+  supportTickets  SupportTicket[]
+  returnRequests  ReturnRequest[]
+
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([senderId])
+  @@index([customerId])
+  @@index([assignedAgentId])
+  @@index([paymentStatus])
+  @@index([estimatedDeliveryDate])
+  @@index([createdAt])
+  @@index([originBranchId, destinationBranchId])
+  @@index([deletedAt])
+  @@map("parcels")
+}
+
+model ParcelAssignment {
+  id                String           @id @default(cuid())
+  parcelId          String
+  agentId           String
+  vehicleId         String?
+  assignedByUserId  String?
+  status            AssignmentStatus @default(ASSIGNED)
+  assignedAt        DateTime         @default(now())
+  unassignedAt      DateTime?
+  reasonForTransfer String?          @db.VarChar(255)
+  notes             String?          @db.VarChar(255)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  parcel  Parcel        @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  agent   DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  vehicle AgentVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([parcelId])
+  @@index([agentId, status])
+  @@index([assignedAt])
+  @@map("parcel_assignments")
+}
+
+model TrackingHistory {
+  id                  String       @id @default(cuid())
+  parcelId            String
+  trackingNumber      String       @db.VarChar(50)
+  status              ParcelStatus
+  subStatus           String?      @db.VarChar(80) // e.g. "SORTING_SCAN_PASSED", "COURIER_ON_WAY"
+  facilityName        String       @db.VarChar(120)
+  locationText        String       @db.VarChar(200)
+  latitude            Decimal?     @db.Decimal(10, 7)
+  longitude           Decimal?     @db.Decimal(10, 7)
+  hubId               String?
+  agentId             String?
+  recordedByUserId    String?
+  description         String       @db.VarChar(500)
+  checkpointTimestamp DateTime     @default(now())
+  createdAt           DateTime     @default(now())
+
+  parcel Parcel         @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  hub    Hub?           @relation(fields: [hubId], references: [id], onDelete: SetNull)
+  agent  DeliveryAgent? @relation("AgentRecordedCheckpoints", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([parcelId, checkpointTimestamp])
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([checkpointTimestamp])
+  @@map("tracking_histories")
+}
+
+model DeliveryProof {
+  id                    String                     @id @default(cuid())
+  parcelId              String                     @unique
+  agentId               String
+  recipientName         String                     @db.VarChar(120)
+  recipientRelationship RecipientProofRelationship @default(SELF)
+  signatureUrl          String?                    @db.Text
+  signatureSvg          String?                    @db.Text
+  photoProofUrl         String?                    @db.Text
+  deliveryLatitude      Decimal?                   @db.Decimal(10, 7)
+  deliveryLongitude     Decimal?                   @db.Decimal(10, 7)
+  gpsAccuracyMeters     Float?
+  notes                 String?                    @db.Text
+  deliveredAt           DateTime                   @default(now())
+  verifiedByAdminId     String?
+  verifiedAt            DateTime?
+  createdAt             DateTime                   @default(now())
+
+  parcel          Parcel        @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  agent           DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  verifiedByAdmin User?         @relation("AdminVerifier", fields: [verifiedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([parcelId])
+  @@index([agentId])
+  @@index([deliveredAt])
+  @@map("delivery_proofs")
+}
+
+// =============================================================================
+// MODULE 6: BILLING, INVOICES & FINANCIAL TRANSACTIONS
+// =============================================================================
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique @db.VarChar(60) // "INV-2026-X82A"
+  customerId      String?
+  parcelId        String?
+  billedUserId    String
+  subtotalAmount  Decimal       @db.Decimal(10, 2)
+  surchargeAmount Decimal       @default(0.00) @db.Decimal(10, 2)
+  taxAmount       Decimal       @default(0.00) @db.Decimal(10, 2)
+  discountAmount  Decimal       @default(0.00) @db.Decimal(10, 2)
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  amountPaid      Decimal       @default(0.00) @db.Decimal(10, 2)
+  balanceDue      Decimal       @db.Decimal(10, 2)
+  currencyCode    String        @default("USD") @db.VarChar(3)
+  status          InvoiceStatus @default(ISSUED)
+  issuedDate      DateTime      @default(now())
+  dueDate         DateTime
+  paidAt          DateTime?
+  notes           String?       @db.VarChar(255)
+  pdfUrl          String?       @db.VarChar(500)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  parcel     Parcel?   @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  billedUser User      @relation("BilledUser", fields: [billedUserId], references: [id], onDelete: Restrict)
+
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@index([invoiceNumber])
+  @@index([billedUserId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([createdAt])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  description String       @db.VarChar(200)
+  itemType    LineItemType @default(BASE_SHIPPING)
+  unitPrice   Decimal      @db.Decimal(10, 2)
+  quantity    Int          @default(1)
+  totalPrice  Decimal      @db.Decimal(10, 2)
+  createdAt   DateTime     @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+model Payment {
+  id                  String                   @id @default(cuid())
+  paymentReference    String                   @unique @db.VarChar(60) // "PAY-2026-X82A"
+  parcelId            String?
+  invoiceId           String?
+  payerUserId         String
+  amount              Decimal                  @db.Decimal(10, 2)
+  currencyCode        String                   @default("USD") @db.VarChar(3)
+  paymentMethod       PaymentMethod            @default(CREDIT_CARD)
+  transactionId       String                   @unique @db.VarChar(120) // Gateway ID
+  gatewayResponseCode String?                  @db.VarChar(40)
+  gatewayMessage      String?                  @db.VarChar(255)
+  status              PaymentTransactionStatus @default(COMPLETED)
+  processedAt         DateTime?                @default(now())
+  refundedAmount      Decimal                  @default(0.00) @db.Decimal(10, 2)
+  receiptUrl          String?                  @db.VarChar(500)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  parcel  Parcel?  @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  payer   User     @relation("PayerUser", fields: [payerUserId], references: [id], onDelete: Restrict)
+
+  transactions TransactionHistory[]
+
+  @@index([paymentReference])
+  @@index([parcelId])
+  @@index([invoiceId])
+  @@index([payerUserId])
+  @@index([status])
+  @@index([transactionId])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model TransactionHistory {
+  id                   String                  @id @default(cuid())
+  paymentId            String
+  transactionType      TransactionType         @default(CHARGE)
+  amount               Decimal                 @db.Decimal(10, 2)
+  balanceAfter         Decimal?                @db.Decimal(10, 2)
+  currencyCode         String                  @default("USD") @db.VarChar(3)
+  referenceNumber      String                  @db.VarChar(100)
+  gatewayTransactionId String?                 @db.VarChar(120)
+  status               TransactionRecordStatus @default(SUCCESS)
+  errorMessage         String?                 @db.VarChar(255)
+  metadata             Json? // Raw payment gateway webhook payload
+  createdAt            DateTime                @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([referenceNumber])
+  @@index([createdAt])
+  @@map("transaction_histories")
+}
+
+// =============================================================================
+// MODULE 7: MULTI-CHANNEL NOTIFICATION SUBSYSTEM
+// =============================================================================
+
+model Notification {
+  id              String                     @id @default(cuid())
+  recipientUserId String
+  title           String                     @db.VarChar(150)
+  message         String                     @db.Text
+  channel         NotificationChannel        @default(IN_APP)
+  type            NotificationType           @default(STATUS_UPDATE)
+  entityType      String?                    @db.VarChar(50) // "parcel", "invoice", "ticket"
+  entityId        String?                    @db.VarChar(60)
+  isRead          Boolean                    @default(false)
+  readAt          DateTime?
+  deliveryStatus  NotificationDeliveryStatus @default(PENDING)
+  failureReason   String?                    @db.VarChar(255)
+  createdAt       DateTime                   @default(now())
+
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, isRead])
+  @@index([recipientUserId, createdAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id               String           @id @default(cuid())
+  userId           String
+  notificationType NotificationType
+  emailEnabled     Boolean          @default(true)
+  smsEnabled       Boolean          @default(true)
+  inAppEnabled     Boolean          @default(true)
+  pushEnabled      Boolean          @default(true)
+  updatedAt        DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationType])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
+// =============================================================================
+// MODULE 8: CUSTOMER SUPPORT & TICKETING SYSTEM
+// =============================================================================
+
+model SupportTicket {
+  id                String         @id @default(cuid())
+  ticketNumber      String         @unique @db.VarChar(50) // "TCK-2026-1049"
+  customerId        String
+  parcelId          String?
+  externalOrderId   String?
+  assignedToAdminId String?
+  subject           String         @db.VarChar(200)
+  category          TicketCategory @default(GENERAL_INQUIRY)
+  priority          TicketPriority @default(MEDIUM)
+  status            TicketStatus   @default(OPEN)
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  customer        User           @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  parcel          Parcel?        @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  externalOrder   ExternalOrder? @relation("ExternalOrderTickets", fields: [externalOrderId], references: [id], onDelete: SetNull)
+  assignedToAdmin User?          @relation("TicketAssignee", fields: [assignedToAdminId], references: [id], onDelete: SetNull)
+
+  messages TicketMessage[]
+
+  @@index([ticketNumber])
+  @@index([customerId])
+  @@index([parcelId])
+  @@index([externalOrderId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id             String   @id @default(cuid())
+  ticketId       String
+  senderUserId   String
+  isInternalNote Boolean  @default(false)
+  messageBody    String   @db.Text
+  attachments    Json? // Array of uploaded attachment file URLs & meta
+  createdAt      DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// =============================================================================
+// MODULE 9: TELEMETRY, AUDIT LOGGING & SYSTEM CONFIGURATION
+// =============================================================================
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  userName   String?  @db.VarChar(120)
+  userRole   String?  @db.VarChar(50)
+  action     String   @db.VarChar(100) // "PARCEL_BOOKED", "PAYMENT_RECEIVED"
+  entityType String   @db.VarChar(60) // "parcel", "user", "payment"
+  entityId   String?  @db.VarChar(60)
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(255)
+  details    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id                String          @id @default(cuid())
+  performedByUserId String?
+  actionType        AuditActionType @default(ACCESS)
+  tableName         String          @db.VarChar(80)
+  recordId          String          @db.VarChar(80)
+  oldValues         Json?
+  newValues         Json?
+  ipAddress         String?         @db.VarChar(45)
+  userAgent         String?         @db.VarChar(255)
+  severity          AuditSeverity   @default(INFO)
+  timestamp         DateTime        @default(now())
+
+  performedByUser User? @relation("AuditActionUser", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tableName, recordId])
+  @@index([performedByUserId])
+  @@index([actionType])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id              String          @id @default(cuid())
+  key             String          @unique @db.VarChar(100)
+  value           String          @db.Text
+  dataType        SettingDataType @default(STRING)
+  category        SettingCategory @default(GENERAL)
+  description     String?         @db.VarChar(255)
+  isPublic        Boolean         @default(false)
+  updatedByUserId String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  updatedByUser User? @relation(fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([key])
+  @@index([category])
+  @@map("system_settings")
+}
+
+// =============================================================================
+// MODULE 10: REPORTING & ANALYTICS ROLLUPS (SLA & REVENUE PERFORMANCE)
+// =============================================================================
+
+model DailyOperationalMetric {
+  id                      String   @id @default(cuid())
+  metricDate              DateTime @unique @db.Date
+  totalBookedCount        Int      @default(0)
+  totalDeliveredCount     Int      @default(0)
+  totalFailedCount        Int      @default(0)
+  totalInTransitCount     Int      @default(0)
+  totalGrossRevenue       Decimal  @default(0.00) @db.Decimal(14, 2)
+  totalNetRevenue         Decimal  @default(0.00) @db.Decimal(14, 2)
+  totalTaxCollected       Decimal  @default(0.00) @db.Decimal(12, 2)
+  avgDeliveryTimeHours    Float    @default(0.0)
+  firstAttemptSuccessRate Float    @default(0.0)
+  activeAgentsCount       Int      @default(0)
+  newCustomersCount       Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([metricDate])
+  @@map("daily_operational_metrics")
+}
+
+model AgentPerformanceMetric {
+  id                        String   @id @default(cuid())
+  agentId                   String
+  periodDate                DateTime @db.Date
+  totalAssignedParcels      Int      @default(0)
+  deliveredCount            Int      @default(0)
+  failedDeliveryCount       Int      @default(0)
+  attemptedDeliveryCount    Int      @default(0)
+  averageDeliveryMinutes    Float    @default(0.0)
+  onTimeDeliveryRate        Float    @default(0.0)
+  customerSatisfactionScore Float?
+  totalDistanceTraveledKm   Decimal? @db.Decimal(8, 2)
+  createdAt                 DateTime @default(now())
+
+  agent DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, periodDate])
+  @@index([agentId])
+  @@index([periodDate])
+  @@map("agent_performance_metrics")
+}
+
+// =============================================================================
+// MODULE 11: UNIVERSAL ORDER HUB - EXTERNAL PLATFORM INTEGRATION
+// =============================================================================
+
+enum ExternalPlatform {
+  AMAZON
+  FLIPKART
+  MYNTRA
+  MEESHO
+  SWIGGY
+  ZOMATO
+  EBAY
+  ETSY
+  OTHER
+  MANUAL
+}
+
+enum ExternalAccountStatus {
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+  ERROR
+  PENDING_AUTH
+}
+
+enum ExternalOrderStatus {
+  ORDERED
+  PACKED
+  SHIPPED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELAYED
+  RETURNED
+  CANCELLED
+  UNKNOWN
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PICKUP_ASSIGNED
+  PICKED_UP
+  IN_TRANSIT_TO_WAREHOUSE
+  RECEIVED_AT_WAREHOUSE
+  COMPLETED
+  CANCELLED
+}
+
+enum ReturnReason {
+  DAMAGED_PRODUCT
+  WRONG_PRODUCT
+  MISSING_ITEM
+  PRODUCT_DEFECT
+  SIZE_ISSUE
+  COLOR_ISSUE
+  CHANGED_MIND
+  NOT_AS_DESCRIBED
+  QUALITY_ISSUE
+  OTHER
+}
+
+enum DeliveryPreferenceType {
+  CALL_BEFORE_DELIVERY
+  LEAVE_AT_DOORSTEP
+  REQUIRE_OTP
+  SIGNATURE_REQUIRED
+  NO_CONTACT_DELIVERY
+}
+
+model ExternalAccount {
+  id                 String                @id @default(cuid())
+  customerId         String
+  platform           ExternalPlatform
+  platformUserId     String?               @db.VarChar(255)
+  platformUserEmail  String?               @db.VarChar(255)
+  platformUserName   String?               @db.VarChar(255)
+  status             ExternalAccountStatus @default(DISCONNECTED)
+  accessToken        String?               @db.Text // Encrypted OAuth token
+  refreshToken       String?               @db.Text // Encrypted refresh token
+  tokenExpiresAt     DateTime?
+  lastSyncedAt       DateTime?
+  syncEnabled        Boolean               @default(true)
+  errorMessage       String?               @db.Text
+  connectionMetadata Json? // Platform-specific connection data
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  externalOrders ExternalOrder[]
+
+  @@unique([customerId, platform])
+  @@index([customerId])
+  @@index([platform])
+  @@index([status])
+  @@map("external_accounts")
+}
+
+model ExternalOrder {
+  id                     String           @id @default(cuid())
+  customerId             String
+  externalAccountId      String?
+  platform               ExternalPlatform
+  platformOrderId        String           @db.VarChar(255)
+  platformTrackingNumber String?          @db.VarChar(255)
+
+  // Product Information
+  productName     String   @db.VarChar(500)
+  productCategory String?  @db.VarChar(100)
+  productImageUrl String?  @db.Text
+  quantity        Int      @default(1)
+  orderAmount     Decimal? @db.Decimal(10, 2)
+  currencyCode    String   @default("USD") @db.VarChar(3)
+
+  // Order Status & Timeline
+  status               ExternalOrderStatus @default(ORDERED)
+  orderDate            DateTime
+  expectedDeliveryDate DateTime?
+  actualDeliveryDate   DateTime?
+
+  // Delivery Information
+  courierName        String? @db.VarChar(150)
+  deliveryAddress    String  @db.Text
+  deliveryCity       String? @db.VarChar(100)
+  deliveryPostalCode String? @db.VarChar(20)
+  recipientName      String? @db.VarChar(150)
+  recipientPhone     String? @db.VarChar(30)
+
+  // Location Tracking
+  currentLocation      String?  @db.VarChar(255)
+  currentLatitude      Decimal? @db.Decimal(10, 7)
+  currentLongitude     Decimal? @db.Decimal(10, 7)
+  estimatedTimeMinutes Int? // ETA in minutes
+
+  // Metadata
+  specialInstructions String?   @db.Text
+  isImported          Boolean   @default(false) // Manual vs auto-imported
+  rawData             Json? // Original platform data
+  lastTrackingUpdate  DateTime?
+  notes               String?   @db.Text
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  externalAccount ExternalAccount? @relation(fields: [externalAccountId], references: [id], onDelete: SetNull)
+
+  trackingEvents    ExternalOrderTracking[]
+  returns           ReturnRequest[]
+  supportTicketsExt SupportTicket[]         @relation("ExternalOrderTickets")
+
+  @@unique([platform, platformOrderId])
+  @@index([customerId])
+  @@index([externalAccountId])
+  @@index([platform])
+  @@index([status])
+  @@index([orderDate])
+  @@index([expectedDeliveryDate])
+  @@index([platformTrackingNumber])
+  @@map("external_orders")
+}
+
+model ExternalOrderTracking {
+  id              String              @id @default(cuid())
+  externalOrderId String
+  status          ExternalOrderStatus
+  location        String              @db.VarChar(255)
+  description     String              @db.Text
+  latitude        Decimal?            @db.Decimal(10, 7)
+  longitude       Decimal?            @db.Decimal(10, 7)
+  eventTimestamp  DateTime
+  createdAt       DateTime            @default(now())
+
+  externalOrder ExternalOrder @relation(fields: [externalOrderId], references: [id], onDelete: Cascade)
+
+  @@index([externalOrderId, eventTimestamp])
+  @@map("external_order_tracking")
+}
+
+model ReturnRequest {
+  id              String  @id @default(cuid())
+  returnNumber    String  @unique @db.VarChar(50) // "RET-2026-X82A"
+  customerId      String
+  parcelId        String?
+  externalOrderId String?
+
+  // Product & Order Details
+  productName    String            @db.VarChar(500)
+  orderPlatform  ExternalPlatform?
+  orderReference String?           @db.VarChar(255)
+
+  // Return Information
+  reason            ReturnReason
+  reasonDescription String?      @db.Text
+  status            ReturnStatus @default(REQUESTED)
+
+  // Pickup Details
+  pickupAddress       String    @db.Text
+  pickupCity          String?   @db.VarChar(100)
+  pickupPostalCode    String?   @db.VarChar(20)
+  preferredPickupDate DateTime?
+  actualPickupDate    DateTime?
+
+  // Assignment
+  assignedAgentId String?
+  assignedAt      DateTime?
+
+  // Proof & Verification
+  pickupProofUrl      String?   @db.Text
+  warehouseReceivedAt DateTime?
+  refundAmount        Decimal?  @db.Decimal(10, 2)
+  refundProcessedAt   DateTime?
+
+  // Admin Actions
+  approvedByAdminId String?
+  approvedAt        DateTime?
+  rejectionReason   String?   @db.Text
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  parcel        Parcel?        @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  externalOrder ExternalOrder? @relation(fields: [externalOrderId], references: [id], onDelete: SetNull)
+  assignedAgent DeliveryAgent? @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+
+  @@index([returnNumber])
+  @@index([customerId])
+  @@index([parcelId])
+  @@index([externalOrderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("return_requests")
+}
+
+model DeliveryPreference {
+  id                  String                 @id @default(cuid())
+  customerId          String
+  preferenceType      DeliveryPreferenceType
+  isEnabled           Boolean                @default(true)
+  preferredTimeStart  String?                @db.VarChar(10) // "09:00"
+  preferredTimeEnd    String?                @db.VarChar(10) // "18:00"
+  specialInstructions String?                @db.Text
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, preferenceType])
+  @@index([customerId])
+  @@map("delivery_preferences")
+}
+
+model CustomerNotification {
+  id         String           @id @default(cuid())
+  customerId String
+  title      String           @db.VarChar(200)
+  message    String           @db.Text
+  type       NotificationType
+  priority   String           @default("medium") @db.VarChar(20) // low, medium, high
+
+  // Related Entities
+  parcelId        String?
+  externalOrderId String?
+  returnRequestId String?
+
+  // Notification State
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  actionUrl   String?   @db.VarChar(500)
+  actionLabel String?   @db.VarChar(100)
+
+  // Delivery Channels
+  sentViaEmail Boolean @default(false)
+  sentViaSms   Boolean @default(false)
+  sentViaPush  Boolean @default(false)
+
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, isRead])
+  @@index([customerId, createdAt])
+  @@index([type])
+  @@map("customer_notifications")
+}

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftRoute Database Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        .tab:hover {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .content {
+            padding: 30px;
+            min-height: 400px;
+        }
+        
+        .table-section {
+            display: none;
+        }
+        
+        .table-section.active {
+            display: block;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tr:hover {
+            background: #f9f9f9;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .badge-primary { background: #e7e9fc; color: #667eea; }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚚 SwiftRoute Database Viewer</h1>
+            <p>Real-time view of your JSON database</p>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">📊 Overview</button>
+            <button class="tab" onclick="showTab('users')">👥 Users</button>
+            <button class="tab" onclick="showTab('parcels')">📦 Parcels</button>
+            <button class="tab" onclick="showTab('tracking')">📍 Tracking</button>
+            <button class="tab" onclick="showTab('payments')">💳 Payments</button>
+            <button class="tab" onclick="showTab('proofs')">✍️ Delivery Proofs</button>
+            <button class="tab" onclick="showTab('logs')">📋 Activity Logs</button>
+            <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="loading">Loading database...</div>
+            <div id="error" style="display:none;"></div>
+            <div id="data-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let dbData = null;
+
+        async function loadDatabase() {
+            try {
+                const response = await fetch('backend/database/datastore.json');
+                if (!response.ok) throw new Error('Database file not found');
+                dbData = await response.json();
+                document.getElementById('loading').style.display = 'none';
+                showTab('overview');
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error Loading Database</h3>
+                        <p>${error.message}</p>
+                        <p><strong>Make sure the server is running:</strong> <code>npm run dev</code></p>
+                    </div>
+                `;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        function showTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target?.classList.add('active');
+
+            const container = document.getElementById('data-container');
+            container.innerHTML = '';
+
+            if (!dbData) return;
+
+            switch(tabName) {
+                case 'overview':
+                    showOverview();
+                    break;
+                case 'users':
+                    showUsers();
+                    break;
+                case 'parcels':
+                    showParcels();
+                    break;
+                case 'tracking':
+                    showTracking();
+                    break;
+                case 'payments':
+                    showPayments();
+                    break;
+                case 'proofs':
+                    showProofs();
+                    break;
+                case 'logs':
+                    showLogs();
+                    break;
+                case 'settings':
+                    showSettings();
+                    break;
+            }
+        }
+
+        function showOverview() {
+            const container = document.getElementById('data-container');
+            container.innerHTML = `
+                <h2 style="margin-bottom: 20px;">Database Overview</h2>
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>Total Users</h3>
+                        <div class="value">${dbData.users.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Parcels</h3>
+                        <div class="value">${dbData.parcels.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Tracking Events</h3>
+                        <div class="value">${dbData.parcel_tracking.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Payments</h3>
+                        <div class="value">${dbData.payments.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Delivery Proofs</h3>
+                        <div class="value">${dbData.delivery_proofs.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Activity Logs</h3>
+                        <div class="value">${dbData.activity_logs.length}</div>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Quick Stats</h3>
+                <table>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                    <tr>
+                        <td>Admin Users</td>
+                        <td>${dbData.users.filter(u => u.role === 'admin').length}</td>
+                    </tr>
+                    <tr>
+                        <td>Agent Users</td>
+                        <td>${dbData.users.filter(u => u.role === 'agent').length}</td>
+                    </tr>
+                    <tr>
+                        <td>Customer Users</td>
+                        <td>${dbData.users.filter(u => u.role === 'customer').length}</td>
+                    </tr>
+                    <tr>
+                        <td>Delivered Parcels</td>
+                        <td>${dbData.parcels.filter(p => p.status === 'delivered').length}</td>
+                    </tr>
+                    <tr>
+                        <td>In Transit</td>
+                        <td>${dbData.parcels.filter(p => p.status === 'in_transit' || p.status === 'out_for_delivery').length}</td>
+                    </tr>
+                    <tr>
+                        <td>Pending Parcels</td>
+                        <td>${dbData.parcels.filter(p => p.status === 'pending').length}</td>
+                    </tr>
+                    <tr>
+                        <td>Total Revenue</td>
+                        <td>$${dbData.payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
+                    </tr>
+                </table>
+            `;
+        }
+
+        function showUsers() {
+            const container = document.getElementById('data-container');
+            let html = '<h2 style="margin-bottom: 20px;">Users</h2><table><tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Phone</th><th>Status</th></tr>';
+            dbData.users.forEach(user => {
+                const roleClass = user.role === 'admin' ? 'badge-danger' : user.role === 'agent' ? 'badge-warning' : 'badge-info';
+                const statusClass = user.status === 'active' ? 'badge-success' : 'badge-danger';
+                html += `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td><strong>${user.full_name}</strong></td>
+                        <td>${user.email}</td>
+                        <td><span class="badge ${roleClass}">${user.role.toUpperCase()}</span></td>
+                        <td>${user.phone}</td>
+                        <td><span class="badge ${statusClass}">${user.status}</span></td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showParcels() {
+            const container = document.getElementById('data-container');
+            let html = '<h2 style="margin-bottom: 20px;">Parcels</h2><table><tr><th>Tracking #</th><th>Sender</th><th>Recipient</th><th>Type</th><th>Status</th><th>Cost</th><th>Payment</th></tr>';
+            dbData.parcels.forEach(parcel => {
+                const statusClass = parcel.status === 'delivered' ? 'badge-success' : parcel.status === 'pending' ? 'badge-warning' : 'badge-info';
+                const paymentClass = parcel.payment_status === 'paid' ? 'badge-success' : 'badge-warning';
+                html += `
+                    <tr>
+                        <td><strong>${parcel.tracking_number}</strong></td>
+                        <td>${parcel.sender_name}</td>
+                        <td>${parcel.recipient_name}</td>
+                        <td><span class="badge badge-primary">${parcel.parcel_type}</span></td>
+                        <td><span class="badge ${statusClass}">${parcel.status.replace('_', ' ')}</span></td>
+                        <td>$${parcel.shipping_cost}</td>
+                        <td><span class="badge ${paymentClass}">${parcel.payment_status}</span></td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showTracking() {
+            const container = document.getElementById('data-container');
+            let html = '<h2 style="margin-bottom: 20px;">Tracking History</h2><table><tr><th>Tracking #</th><th>Status</th><th>Location</th><th>Description</th><th>Timestamp</th></tr>';
+            dbData.parcel_tracking.forEach(track => {
+                const statusClass = track.status === 'delivered' ? 'badge-success' : track.status === 'pending' ? 'badge-warning' : 'badge-info';
+                html += `
+                    <tr>
+                        <td><strong>${track.tracking_number}</strong></td>
+                        <td><span class="badge ${statusClass}">${track.status.replace('_', ' ')}</span></td>
+                        <td>${track.location}</td>
+                        <td>${track.description}</td>
+                        <td>${new Date(track.timestamp).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showPayments() {
+            const container = document.getElementById('data-container');
+            let html = '<h2 style="margin-bottom: 20px;">Payments</h2><table><tr><th>ID</th><th>Parcel ID</th><th>Amount</th><th>Method</th><th>Transaction ID</th><th>Status</th><th>Date</th></tr>';
+            dbData.payments.forEach(payment => {
+                const statusClass = payment.status === 'completed' ? 'badge-success' : 'badge-warning';
+                html += `
+                    <tr>
+                        <td>${payment.id}</td>
+                        <td>${payment.parcel_id}</td>
+                        <td><strong>$${payment.amount}</strong></td>
+                        <td><span class="badge badge-primary">${payment.payment_method}</span></td>
+                        <td>${payment.transaction_id}</td>
+                        <td><span class="badge ${statusClass}">${payment.status}</span></td>
+                        <td>${new Date(payment.created_at).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showProofs() {
+            const container = document.getElementById('data-container');
+            if (dbData.delivery_proofs.length === 0) {
+                container.innerHTML = '<div class="error">No delivery proofs available yet.</div>';
+                return;
+            }
+            let html = '<h2 style="margin-bottom: 20px;">Delivery Proofs</h2><table><tr><th>ID</th><th>Parcel ID</th><th>Agent</th><th>Recipient</th><th>Notes</th><th>Delivered At</th></tr>';
+            dbData.delivery_proofs.forEach(proof => {
+                html += `
+                    <tr>
+                        <td>${proof.id}</td>
+                        <td>${proof.parcel_id}</td>
+                        <td>${proof.agent_id}</td>
+                        <td><strong>${proof.recipient_name}</strong></td>
+                        <td>${proof.notes}</td>
+                        <td>${new Date(proof.delivered_at).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showLogs() {
+            const container = document.getElementById('data-container');
+            let html = '<h2 style="margin-bottom: 20px;">Activity Logs</h2><table><tr><th>User</th><th>Role</th><th>Action</th><th>Details</th><th>Timestamp</th></tr>';
+            dbData.activity_logs.forEach(log => {
+                const roleClass = log.user_role === 'admin' ? 'badge-danger' : log.user_role === 'agent' ? 'badge-warning' : 'badge-info';
+                html += `
+                    <tr>
+                        <td><strong>${log.user_name || 'System'}</strong></td>
+                        <td><span class="badge ${roleClass}">${log.user_role || 'system'}</span></td>
+                        <td><span class="badge badge-primary">${log.action}</span></td>
+                        <td>${log.details}</td>
+                        <td>${new Date(log.created_at).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        function showSettings() {
+            const container = document.getElementById('data-container');
+            container.innerHTML = `
+                <h2 style="margin-bottom: 20px;">System Settings</h2>
+                <pre>${JSON.stringify(dbData.system_settings, null, 2)}</pre>
+            `;
+        }
+
+        // Load database on page load
+        loadDatabase();
+    </script>
+</body>
+</html>

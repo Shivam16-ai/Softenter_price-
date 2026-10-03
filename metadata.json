@@ -1,0 +1,6 @@
+{
+  "name": "SwiftRoute Enterprise Parcel Management",
+  "description": "Enterprise Courier & Parcel Management System with role-based dashboards, live parcel tracking, booking, delivery proof, invoices, and analytics.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

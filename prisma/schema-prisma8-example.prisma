@@ -1,0 +1,353 @@
+// SwiftRoute Enterprise - Prisma 8 Modern Schema Example
+// Demonstrates new Prisma 8 features: composite types, custom scalars, modern enums
+
+// use prisma-8
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// CUSTOM SCALAR TYPES - Reusable type definitions
+// =============================================================================
+
+types {
+  ShortName = VarChar(35)
+  Email = VarChar(255)
+  PhoneNumber = VarChar(30)
+  TrackingNumber = VarChar(50)
+  FullName = VarChar(120)
+  CityName = VarChar(100)
+  PostalCode = VarChar(20)
+}
+
+// =============================================================================
+// COMPOSITE TYPES - Embedded structured data
+// =============================================================================
+
+type Address {
+  street1       String
+  street2       String?
+  city          CityName
+  stateProvince String
+  postalCode    PostalCode?
+  country       String  @default("US")
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+}
+
+type ContactInfo {
+  name  FullName
+  phone PhoneNumber
+  email Email?
+}
+
+type Dimensions {
+  lengthCm Decimal @db.Decimal(6, 2)
+  widthCm  Decimal @db.Decimal(6, 2)
+  heightCm Decimal @db.Decimal(6, 2)
+}
+
+type MonetaryAmount {
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("USD") @db.VarChar(3)
+}
+
+// =============================================================================
+// ENUMS - Using Prisma 8 Modern Syntax with Native DB Types
+// =============================================================================
+
+enum UserRoleType {
+  @@type("pg/text@1")
+  SUPER_ADMIN      = "super_admin"
+  ADMIN            = "admin"
+  DISPATCHER       = "dispatcher"
+  COURIER_AGENT    = "courier_agent"
+  CUSTOMER         = "customer"
+  HUB_MANAGER      = "hub_manager"
+}
+
+enum UserStatus {
+  @@type("pg/text@1")
+  ACTIVE               = "active"
+  SUSPENDED            = "suspended"
+  PENDING_VERIFICATION = "pending_verification"
+  DEACTIVATED          = "deactivated"
+}
+
+enum ParcelType {
+  @@type("pg/text@1")
+  STANDARD          = "standard"
+  EXPRESS           = "express"
+  FRAGILE           = "fragile"
+  HEAVY_FREIGHT     = "heavy_freight"
+  DOCUMENT          = "document"
+  COLD_CHAIN        = "cold_chain"
+  HAZARDOUS_MATERIAL = "hazardous_material"
+}
+
+enum ParcelStatus {
+  @@type("pg/text@1")
+  PENDING            = "pending"
+  ASSIGNED           = "assigned"
+  PICKED_UP          = "picked_up"
+  IN_SORTING         = "in_sorting"
+  IN_TRANSIT         = "in_transit"
+  ARRIVED_AT_HUB     = "arrived_at_hub"
+  OUT_FOR_DELIVERY   = "out_for_delivery"
+  DELIVERED          = "delivered"
+  ATTEMPTED_DELIVERY = "attempted_delivery"
+  FAILED             = "failed"
+  RETURNED_TO_SENDER = "returned_to_sender"
+  CANCELLED          = "cancelled"
+  ON_HOLD            = "on_hold"
+}
+
+enum PaymentStatus {
+  @@type("pg/text@1")
+  UNPAID         = "unpaid"
+  PARTIALLY_PAID = "partially_paid"
+  PAID           = "paid"
+  REFUNDED       = "refunded"
+  WAIVED         = "waived"
+}
+
+enum PaymentMethod {
+  @@type("pg/text@1")
+  CREDIT_CARD       = "credit_card"
+  DEBIT_CARD        = "debit_card"
+  BANK_TRANSFER     = "bank_transfer"
+  CASH_ON_DELIVERY  = "cash_on_delivery"
+  DIGITAL_WALLET    = "digital_wallet"
+  STRIPE            = "stripe"
+  PAYPAL            = "paypal"
+  CORPORATE_ACCOUNT = "corporate_account"
+}
+
+enum Priority {
+  @@type("pg/text@1")
+  LOW    = "low"
+  MEDIUM = "medium"
+  HIGH   = "high"
+  URGENT = "urgent"
+}
+
+// =============================================================================
+// CORE MODELS - Using Composite Types & Custom Scalars
+// =============================================================================
+
+model User {
+  id                Uuid         @id @default(uuid())
+  email             Email        @unique
+  passwordHash      String       @db.VarChar(255)
+  fullName          FullName
+  phone             PhoneNumber
+  address           Address?
+  avatarUrl         String?      @db.VarChar(500)
+  status            UserStatus   @default(ACTIVE)
+  role              UserRoleType
+  isEmailVerified   Boolean      @default(false)
+  twoFactorEnabled  Boolean      @default(false)
+  lastLoginAt       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Relations
+  sentParcels       Parcel[]     @relation("ParcelSender")
+  sessions          UserSession[]
+  payments          Payment[]
+  activityLogs      ActivityLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model UserSession {
+  id        Uuid     @id @default(uuid())
+  userId    Uuid
+  tokenHash String   @unique @db.VarChar(255)
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?  @db.VarChar(500)
+  isValid   Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isValid])
+  @@index([tokenHash])
+  @@map("user_sessions")
+}
+
+model Branch {
+  id             Uuid     @id @default(uuid())
+  code           String   @unique @db.VarChar(40)
+  name           String   @db.VarChar(120)
+  address        Address
+  contactPhone   PhoneNumber
+  contactEmail   Email
+  operatingHours String?  @db.VarChar(100)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  originParcels      Parcel[] @relation("OriginBranch")
+  destinationParcels Parcel[] @relation("DestinationBranch")
+
+  @@index([code])
+  @@index([isActive])
+  @@map("branches")
+}
+
+model Parcel {
+  id               Uuid          @id @default(uuid())
+  trackingNumber   TrackingNumber @unique
+  senderId         Uuid
+  parcelType       ParcelType    @default(STANDARD)
+  status           ParcelStatus  @default(PENDING)
+  priority         Priority      @default(MEDIUM)
+  
+  // Using composite types
+  senderContact    ContactInfo
+  recipientContact ContactInfo
+  pickupAddress    Address
+  deliveryAddress  Address
+  dimensions       Dimensions?
+  
+  // Physical & Pricing
+  weightKg              Decimal  @db.Decimal(8, 2)
+  declaredValue         MonetaryAmount?
+  shippingCost          MonetaryAmount
+  paymentStatus         PaymentStatus @default(UNPAID)
+  
+  // Logistics
+  originBranchId        Uuid?
+  destinationBranchId   Uuid?
+  assignedAgentId       Uuid?
+  
+  // Scheduling
+  estimatedDeliveryDate DateTime
+  actualDeliveryDate    DateTime?
+  pickupScheduledAt     DateTime?
+  pickedUpAt            DateTime?
+  
+  // Additional
+  specialInstructions   String?   @db.Text
+  isInsured             Boolean   @default(false)
+  signatureRequired     Boolean   @default(true)
+  
+  // Metadata
+  deletedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  sender          User      @relation("ParcelSender", fields: [senderId], references: [id], onDelete: Restrict)
+  originBranch    Branch?   @relation("OriginBranch", fields: [originBranchId], references: [id], onDelete: SetNull)
+  destinationBranch Branch? @relation("DestinationBranch", fields: [destinationBranchId], references: [id], onDelete: SetNull)
+  trackingHistory TrackingHistory[]
+  payments        Payment[]
+
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([senderId])
+  @@index([paymentStatus])
+  @@index([estimatedDeliveryDate])
+  @@index([createdAt])
+  @@map("parcels")
+}
+
+model TrackingHistory {
+  id                  Uuid         @id @default(uuid())
+  parcelId            Uuid
+  trackingNumber      TrackingNumber
+  status              ParcelStatus
+  subStatus           String?      @db.VarChar(80)
+  facilityName        String       @db.VarChar(120)
+  location            Address
+  description         String       @db.VarChar(500)
+  checkpointTimestamp DateTime     @default(now())
+  createdAt           DateTime     @default(now())
+
+  parcel Parcel @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+
+  @@index([parcelId, checkpointTimestamp])
+  @@index([trackingNumber])
+  @@index([status])
+  @@map("tracking_histories")
+}
+
+model Payment {
+  id              Uuid          @id @default(uuid())
+  parcelId        Uuid
+  userId          Uuid
+  amount          MonetaryAmount
+  paymentMethod   PaymentMethod
+  transactionId   String        @db.VarChar(100)
+  status          PaymentStatus @default(UNPAID)
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  parcel Parcel @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([parcelId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model ActivityLog {
+  id          Uuid     @id @default(uuid())
+  userId      Uuid
+  userName    FullName
+  userRole    UserRoleType
+  action      String   @db.VarChar(60)
+  entityType  String   @db.VarChar(40)
+  entityId    Uuid?
+  details     String   @db.VarChar(500)
+  ipAddress   String?  @db.VarChar(45)
+  userAgent   String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// =============================================================================
+// SYSTEM CONFIGURATION
+// =============================================================================
+
+model SystemSettings {
+  id                        Uuid    @id @default(uuid())
+  companyName               String  @db.VarChar(150)
+  supportEmail              Email
+  supportPhone              PhoneNumber
+  currency                  String  @default("USD") @db.VarChar(3)
+  baseRatePerKg             Decimal @db.Decimal(8, 2)
+  expressSurcharge          Decimal @db.Decimal(8, 2)
+  fragileSurcharge          Decimal @db.Decimal(8, 2)
+  taxRatePercent            Decimal @db.Decimal(5, 2)
+  enableEmailNotifications  Boolean @default(true)
+  enableSmsNotifications    Boolean @default(true)
+  maintenanceMode           Boolean @default(false)
+  updatedAt                 DateTime @updatedAt
+
+  @@map("system_settings")
+}
