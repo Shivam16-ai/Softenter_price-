@@ -338,6 +338,7 @@ export const registerAgent = async (req: Request, res: Response) => {
 /**
  * Universal Login: Supports Customer Email, Delivery Agent Company Email, or Delivery Agent Employee ID
  * WITH PORTAL VALIDATION: Detects wrong portal usage and provides guidance
+ * ADMIN AUTHENTICATION: Admin can ONLY login with credentials from environment variables
  */
 export const login = async (req: Request, res: Response) => {
   try {
@@ -351,6 +352,55 @@ export const login = async (req: Request, res: Response) => {
     const lowerId = rawIdentifier.toLowerCase();
     const upperId = rawIdentifier.toUpperCase();
 
+    // CRITICAL: Admin authentication ONLY via environment variables
+    const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (adminEmail && lowerId === adminEmail) {
+      // This is an admin login attempt - validate ONLY against env credentials
+      if (!adminPassword || password !== adminPassword) {
+        return sendError(res, 'Invalid admin credentials. Access denied.', 401);
+      }
+
+      // Admin credentials match - fetch or create admin user
+      let adminUser = await prisma.user.findFirst({
+        where: { email: adminEmail },
+        include: {
+          role: true,
+          customerProfile: true,
+          deliveryAgentProfile: true,
+        },
+      });
+
+      // If admin user doesn't exist in database, find admin role and deny (security measure)
+      if (!adminUser) {
+        return sendError(res, 'Admin account not found. Please contact system administrator.', 403);
+      }
+
+      // Verify the user has admin role
+      if (adminUser.role.code !== 'ADMIN' && adminUser.role.code !== 'SUPER_ADMIN') {
+        return sendError(res, 'This account does not have administrative privileges.', 403);
+      }
+
+      const mappedUser = mapPrismaUserToLegacy(adminUser);
+      const token = jwt.sign(
+        { id: mappedUser.id, email: mappedUser.email, role: mappedUser.role },
+        config.jwtSecret,
+        { expiresIn: '7d' }
+      );
+
+      logActivity(
+        { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
+        'ADMIN_LOGIN',
+        'user',
+        mappedUser.id,
+        `Administrator ${mappedUser.full_name} authenticated via environment credentials`
+      );
+
+      return sendSuccess(res, { token, user: mappedUser }, 'Admin authenticated successfully');
+    }
+
+    // Non-admin login - proceed with normal database authentication
     // Search for user in Prisma by email or employee code
     let user = await prisma.user.findFirst({
       where: {
@@ -368,6 +418,11 @@ export const login = async (req: Request, res: Response) => {
 
     if (!user) {
       return sendError(res, 'Invalid credentials. Please verify your email or Employee ID and password.', 401);
+    }
+
+    // Security check: Prevent non-admin users from using admin/super_admin roles
+    if (user.role.code === 'ADMIN' || user.role.code === 'SUPER_ADMIN') {
+      return sendError(res, 'Invalid credentials. Admin accounts can only login with designated admin credentials.', 401);
     }
 
     if (user.status === 'SUSPENDED') {

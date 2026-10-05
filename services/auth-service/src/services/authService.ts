@@ -81,14 +81,47 @@ export const registerAgent = async (data: {
 };
 
 export const loginUser = async (identifier: string, password: string, portalType?: string) => {
-  const user = await userRepo.findUserByEmail(identifier);
+  const lowerId = identifier.toLowerCase().trim();
+  
+  // CRITICAL: Admin authentication ONLY via environment variables
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (adminEmail && lowerId === adminEmail) {
+    // This is an admin login attempt - validate ONLY against env credentials
+    if (!adminPassword || password !== adminPassword) {
+      throw new Error('Invalid admin credentials. Access denied.');
+    }
+
+    // Admin credentials match - fetch admin user from database
+    const adminUser = await userRepo.findUserByEmail(adminEmail);
+    if (!adminUser) {
+      throw new Error('Admin account not found. Please contact system administrator.');
+    }
+
+    // Verify the user has admin role
+    if (adminUser.role.code !== 'ADMIN' && adminUser.role.code !== 'SUPER_ADMIN') {
+      throw new Error('This account does not have administrative privileges.');
+    }
+
+    const token = generateToken({ id: adminUser.id, email: adminUser.email, role: 'admin' });
+    logger.info(`Admin logged in via environment credentials: ${adminUser.email}`);
+    return { token, user: userRepo.mapUserToResponse(adminUser) };
+  }
+
+  // Non-admin login - proceed with normal database authentication
+  const user = await userRepo.findUserByEmail(lowerId);
   if (!user) throw new Error('Invalid credentials');
+
+  // Security check: Prevent non-admin users from using admin/super_admin roles
+  if (user.role.code === 'ADMIN' || user.role.code === 'SUPER_ADMIN') {
+    throw new Error('Invalid credentials. Admin accounts can only login with designated admin credentials.');
+  }
 
   if (user.status === 'SUSPENDED') throw new Error('Account has been suspended');
 
   // Portal type validation
-  const userRole = user.role.code === 'ADMIN' ? 'admin' :
-                   user.role.code === 'COURIER_AGENT' ? 'agent' : 'customer';
+  const userRole = user.role.code === 'COURIER_AGENT' ? 'agent' : 'customer';
 
   if (portalType && userRole !== 'admin') {
     if (portalType === 'customer' && userRole === 'agent') {
