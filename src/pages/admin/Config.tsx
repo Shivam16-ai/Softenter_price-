@@ -80,7 +80,7 @@ export const AdminConfig: React.FC = () => {
                 Base Delivery Rate
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
                 <input
                   type="number"
                   step="0.01"
@@ -96,7 +96,7 @@ export const AdminConfig: React.FC = () => {
                 Per KG Rate
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
                 <input
                   type="number"
                   step="0.01"

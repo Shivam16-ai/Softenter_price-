@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { 
   Parcel, 
   User, 
@@ -306,7 +307,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            $<AnimatedCounter value={stats?.totalRevenue || 0} decimals={2} />
+            {getCurrencySymbol()}<AnimatedCounter value={stats?.totalRevenue || 0} decimals={2} />
           </div>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 block">
             Net settled commercial funds
@@ -854,7 +855,7 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Base Rate / Kg ($)</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Base Rate / Kg (₹)</label>
                   <input
                     type="number"
                     step="0.5"
@@ -864,7 +865,7 @@ export const AdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Express Surcharge ($)</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Express Surcharge (₹)</label>
                   <input
                     type="number"
                     step="1"

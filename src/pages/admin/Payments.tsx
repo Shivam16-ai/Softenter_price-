@@ -3,6 +3,7 @@ import { CreditCard, Download } from 'lucide-react';
 import { api } from '../../services/api';
 import { Payment } from '../../../shared/types';
 import { TableSkeleton } from '../../components/common/SkeletonLoader';
+import { formatCurrency } from '../../utils/currency';
 
 export const AdminPayments: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -64,7 +65,7 @@ export const AdminPayments: React.FC = () => {
                     <td className="py-3.5 px-4 font-mono font-bold text-white">{payment.id}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">{payment.parcel_id}</td>
                     <td className="py-3.5 px-4 font-mono font-bold text-green-400">
-                      ${payment.amount.toFixed(2)}
+                      {formatCurrency(payment.amount)}
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-800 text-slate-300">

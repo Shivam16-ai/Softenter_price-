@@ -546,7 +546,7 @@ async function migrateData() {
       { key: 'company_name', value: settings.company_name || 'SwiftRoute Global Logistics', dataType: 'STRING', category: 'GENERAL' },
       { key: 'support_email', value: settings.support_email || 'support@swiftroute.com', dataType: 'STRING', category: 'GENERAL' },
       { key: 'support_phone', value: settings.support_phone || '+1 (800) 555-SWIFT', dataType: 'STRING', category: 'GENERAL' },
-      { key: 'currency', value: settings.currency || 'USD', dataType: 'STRING', category: 'PRICING' },
+      { key: 'currency', value: settings.currency || 'INR', dataType: 'STRING', category: 'PRICING' },
       { key: 'base_rate_per_kg', value: String(settings.base_rate_per_kg || 8.5), dataType: 'NUMBER', category: 'PRICING' },
       { key: 'tax_rate_percent', value: String(settings.tax_rate_percent || 8.25), dataType: 'NUMBER', category: 'PRICING' },
     ];

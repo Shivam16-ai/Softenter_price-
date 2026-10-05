@@ -338,7 +338,7 @@ const getInitialDatabaseState = () => {
     company_name: 'SwiftRoute Global Logistics Inc.',
     support_email: 'dispatch@swiftroute.com',
     support_phone: '+1 (800) 555-SWIFT',
-    currency: 'USD',
+    currency: 'INR',
     base_rate_per_kg: 8.5,
     express_surcharge: 15.0,
     fragile_surcharge: 7.5,

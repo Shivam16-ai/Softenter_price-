@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Parcel, Payment, ParcelType } from '../../../shared/types';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { TrackingTimeline } from '../../components/common/TrackingTimeline';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { InvoiceModal } from '../../components/common/InvoiceModal';
 import { PaymentModal } from '../../components/common/PaymentModal';
 import { DashboardLayout, NavItem } from '../../components/common/DashboardLayout';
@@ -410,7 +411,7 @@ export const CustomerDashboard: React.FC<{ initialTab?: 'parcels' | 'book' | 'pa
                           <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">{p.weight_kg} kg</span>
                         </td>
                         <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                          ${p.shipping_cost.toFixed(2)}
+                          {formatCurrency(p.shipping_cost)}
                         </td>
                         <td className="py-3.5 px-4">
                           <StatusBadge status={p.status} size="sm" />
@@ -660,7 +661,7 @@ export const CustomerDashboard: React.FC<{ initialTab?: 'parcels' | 'book' | 'pa
                         {pay.payment_method.replace('_', ' ')}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                        ${pay.amount.toFixed(2)}
+                        {formatCurrency(pay.amount)}
                       </td>
                       <td className="py-3.5 px-4">
                         <StatusBadge status={pay.status} type="payment" size="sm" />

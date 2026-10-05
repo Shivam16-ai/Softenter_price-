@@ -922,7 +922,7 @@ model Invoice {
   totalAmount     Decimal       @db.Decimal(10, 2)
   amountPaid      Decimal       @default(0.00) @db.Decimal(10, 2)
   balanceDue      Decimal       @db.Decimal(10, 2)
-  currencyCode    String        @default("USD") @db.VarChar(3)
+  currencyCode    String        @default("INR") @db.VarChar(3)
   status          InvoiceStatus @default(ISSUED)
   issuedDate      DateTime      @default(now())
   dueDate         DateTime
@@ -970,7 +970,7 @@ model Payment {
   invoiceId           String?
   payerUserId         String
   amount              Decimal                  @db.Decimal(10, 2)
-  currencyCode        String                   @default("USD") @db.VarChar(3)
+  currencyCode        String                   @default("INR") @db.VarChar(3)
   paymentMethod       PaymentMethod            @default(CREDIT_CARD)
   transactionId       String                   @unique @db.VarChar(120) // Gateway ID
   gatewayResponseCode String?                  @db.VarChar(40)
@@ -1004,7 +1004,7 @@ model TransactionHistory {
   transactionType      TransactionType         @default(CHARGE)
   amount               Decimal                 @db.Decimal(10, 2)
   balanceAfter         Decimal?                @db.Decimal(10, 2)
-  currencyCode         String                  @default("USD") @db.VarChar(3)
+  currencyCode         String                  @default("INR") @db.VarChar(3)
   referenceNumber      String                  @db.VarChar(100)
   gatewayTransactionId String?                 @db.VarChar(120)
   status               TransactionRecordStatus @default(SUCCESS)
@@ -1344,7 +1344,7 @@ model ExternalOrder {
   productImageUrl String?  @db.Text
   quantity        Int      @default(1)
   orderAmount     Decimal? @db.Decimal(10, 2)
-  currencyCode    String   @default("USD") @db.VarChar(3)
+  currencyCode    String   @default("INR") @db.VarChar(3)
 
   // Order Status & Timeline
   status               ExternalOrderStatus @default(ORDERED)

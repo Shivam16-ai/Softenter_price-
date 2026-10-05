@@ -71,7 +71,7 @@ const OPERATIONS: OperationItem[] = [
     metrics: [
       { label: 'Invoicing Speed', value: 'Instant' },
       { label: 'Tax Accuracy', value: '100% Tax Compliant' },
-      { label: 'Multi-Currency', value: 'USD · EUR · INR' },
+      { label: 'Multi-Currency', value: 'INR · USD · EUR' },
     ],
     highlight: 'Automated dimensional weight tariff calculation according to IATA standards',
     icon: Receipt,

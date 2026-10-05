@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../../services/api';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { Parcel, Payment } from '../../../shared/types';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { TrackingTimeline } from '../../components/common/TrackingTimeline';
@@ -175,7 +176,7 @@ export const MySwiftRouteParcels: React.FC = () => {
               </div>
             </div>
             <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-              $<AnimatedCounter value={totalSpent} decimals={2} />
+              {getCurrencySymbol()}<AnimatedCounter value={totalSpent} decimals={2} />
             </div>
             <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
               <span>Itemized commercial invoices</span>
@@ -281,7 +282,7 @@ export const MySwiftRouteParcels: React.FC = () => {
                         <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">{p.weight_kg} kg</span>
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                        ${p.shipping_cost.toFixed(2)}
+                        {formatCurrency(p.shipping_cost)}
                       </td>
                       <td className="py-3.5 px-4">
                         <StatusBadge status={p.status} size="sm" />

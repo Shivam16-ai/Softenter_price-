@@ -4,6 +4,7 @@ import { Payment } from '../../../shared/types';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { InvoiceModal } from '../../components/common/InvoiceModal';
 import { EmptyState } from '../../components/common/EmptyState';
+import { formatCurrency } from '../../utils/currency';
 
 export const PaymentsInvoices: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -83,7 +84,7 @@ export const PaymentsInvoices: React.FC = () => {
                       {pay.payment_method.replace('_', ' ')}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                      ${pay.amount.toFixed(2)}
+                      {formatCurrency(pay.amount)}
                     </td>
                     <td className="py-3.5 px-4">
                       <StatusBadge status={pay.status} type="payment" size="sm" />

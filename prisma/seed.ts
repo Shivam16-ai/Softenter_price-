@@ -33,7 +33,7 @@ async function main() {
     { key: 'company_name', value: 'SwiftRoute Logistics Enterprise Inc.', dataType: 'STRING', category: 'GENERAL', isPublic: true },
     { key: 'support_email', value: 'support@swiftroute.com', dataType: 'STRING', category: 'GENERAL', isPublic: true },
     { key: 'support_phone', value: '+1 (800) 555-SWIFT', dataType: 'STRING', category: 'GENERAL', isPublic: true },
-    { key: 'currency', value: 'USD', dataType: 'STRING', category: 'PRICING', isPublic: true },
+    { key: 'currency', value: 'INR', dataType: 'STRING', category: 'PRICING', isPublic: true },
     { key: 'base_rate_per_kg', value: '5.50', dataType: 'NUMBER', category: 'PRICING', isPublic: true },
     { key: 'express_surcharge', value: '18.00', dataType: 'NUMBER', category: 'PRICING', isPublic: true },
     { key: 'fragile_surcharge', value: '12.00', dataType: 'NUMBER', category: 'PRICING', isPublic: true },

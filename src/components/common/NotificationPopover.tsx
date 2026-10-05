@@ -23,7 +23,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'n2',
     title: 'Payment Confirmed',
-    message: 'Settlement of $44.75 successfully verified via Credit Card.',
+    message: 'Settlement of ₹44.75 successfully verified via Credit Card.',
     time: '24 mins ago',
     type: 'payment',
     unread: true,

@@ -306,7 +306,7 @@ function handleLogisticsIntent(query: string, context: AssistantContext): Assist
   // 5. FREIGHT & PRICING FAQ
   if (lower.includes('price') || lower.includes('rate') || lower.includes('cost') || lower.includes('how much')) {
     return {
-      reply: "Our standard freight starts at $5.50 per kg with an 8.5% logistics tax. Express Next-Day air transit includes an $18 surcharge, and Fragile handling with air-cushioned shock protection adds $12.",
+      reply: "Our standard freight starts at ₹5.50 per kg with an 8.5% logistics tax. Express Next-Day air transit includes a ₹18 surcharge, and Fragile handling with air-cushioned shock protection adds ₹12.",
       action: { type: 'speak_only' },
       suggestions: ['Open parcel booking', 'Track parcel', 'Go to dashboard'],
       detectedIntent: 'PRICING_FAQ',

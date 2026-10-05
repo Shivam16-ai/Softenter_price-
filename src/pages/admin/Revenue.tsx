@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp } from 'lucide-react';
 import { api } from '../../services/api';
 import { DashboardStats } from '../../../shared/types';
 import { AnimatedCounter } from '../../components/common/AnimatedCounter';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 
 export const AdminRevenue: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -49,7 +50,7 @@ export const AdminRevenue: React.FC = () => {
             <DollarSign className="w-5 h-5 text-green-400" />
           </div>
           <div className="text-3xl font-black text-white font-mono mb-2">
-            $<AnimatedCounter value={stats?.totalRevenue || 0} decimals={2} />
+            {getCurrencySymbol()}<AnimatedCounter value={stats?.totalRevenue || 0} decimals={2} />
           </div>
           <div className="flex items-center gap-1 text-xs text-green-400">
             <TrendingUp className="w-3 h-3" />
@@ -63,7 +64,7 @@ export const AdminRevenue: React.FC = () => {
             <DollarSign className="w-5 h-5 text-blue-400" />
           </div>
           <div className="text-3xl font-black text-white font-mono">
-            ${stats?.totalParcels ? ((stats.totalRevenue || 0) / stats.totalParcels).toFixed(2) : '0.00'}
+            {stats?.totalParcels ? formatCurrency((stats.totalRevenue || 0) / stats.totalParcels) : formatCurrency(0)}
           </div>
           <p className="text-xs text-slate-400 mt-2">Per shipment</p>
         </div>

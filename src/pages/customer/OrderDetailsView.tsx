@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { formatCurrency } from '../../utils/currency';
 
 interface OrderDetailsViewProps {
   order: any;
@@ -352,7 +353,7 @@ const OrderDetailsTab: React.FC<{ order: any; platform: any }> = ({ order, platf
           {order.order_amount && (
             <InfoCard
               label="Order Amount"
-              value={`${order.currency_code || 'USD'} ${order.order_amount.toFixed(2)}`}
+              value={formatCurrency(order.order_amount)}
               icon={<span className="text-xl">💰</span>}
             />
           )}

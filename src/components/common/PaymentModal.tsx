@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { api } from '../../services/api';
 import { Parcel, PaymentMethod } from '../../../shared/types';
+import { formatCurrency } from '../../utils/currency';
 
 interface PaymentModalProps {
   parcel: Parcel | null;
@@ -83,8 +84,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ parcel, onClose, onS
               <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">Consignment: {parcel.tracking_number}</span>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">${parcel.shipping_cost.toFixed(2)}</span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">USD Net Incl. Taxes</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{formatCurrency(parcel.shipping_cost)}</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">INR Net Incl. Taxes</span>
             </div>
           </div>
 
@@ -212,7 +213,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ parcel, onClose, onS
               className="inline-flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-600/20 transition-all disabled:opacity-50 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              {submitting ? 'Authorizing...' : `Pay $${parcel.shipping_cost.toFixed(2)} USD`}
+              {submitting ? 'Authorizing...' : `Pay ${formatCurrency(parcel.shipping_cost)}`}
             </button>
           </div>
         </form>

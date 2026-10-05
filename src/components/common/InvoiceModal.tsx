@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Printer, Download, CheckCircle, Clock, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../../services/api';
+import { formatCurrency } from '../../utils/currency';
 
 interface InvoiceModalProps {
   parcelId: string | null;
@@ -148,7 +149,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ parcelId, onClose })
                   <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-800">
                     <tr>
                       <th className="py-3 px-4">Service Description</th>
-                      <th className="py-3 px-4 text-right">Amount (USD)</th>
+                      <th className="py-3 px-4 text-right">Amount (INR)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -156,7 +157,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ parcelId, onClose })
                       <tr key={i}>
                         <td className="py-2.5 px-4 text-slate-700 dark:text-slate-300">{c.description}</td>
                         <td className="py-2.5 px-4 text-right font-mono text-slate-900 dark:text-slate-100 font-semibold">
-                          ${c.amount.toFixed(2)}
+                          {formatCurrency(c.amount)}
                         </td>
                       </tr>
                     ))}
@@ -164,16 +165,16 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ parcelId, onClose })
                   <tfoot className="bg-slate-50 dark:bg-slate-800/50 font-semibold text-xs border-t border-slate-200 dark:border-slate-800">
                     <tr>
                       <td className="py-2 px-4 text-slate-500 dark:text-slate-400">Subtotal</td>
-                      <td className="py-2 px-4 text-right font-mono text-slate-800 dark:text-slate-200">${invoice.subtotal.toFixed(2)}</td>
+                      <td className="py-2 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{formatCurrency(invoice.subtotal)}</td>
                     </tr>
                     <tr>
                       <td className="py-2 px-4 text-slate-500 dark:text-slate-400">Tax / Regulatory Handling Fee</td>
-                      <td className="py-2 px-4 text-right font-mono text-slate-800 dark:text-slate-200">${invoice.tax.toFixed(2)}</td>
+                      <td className="py-2 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{formatCurrency(invoice.tax)}</td>
                     </tr>
                     <tr className="border-t-2 border-slate-300 dark:border-slate-700 text-sm">
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">Total Settled Amount</td>
                       <td className="py-3 px-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 text-base">
-                        ${invoice.total.toFixed(2)}
+                        {formatCurrency(invoice.total)}
                       </td>
                     </tr>
                   </tfoot>
