@@ -1,866 +1,802 @@
-# Universal Order Hub - Testing Guide
-## SWIFTRoute Enterprise Parcel Management System
+# SWIFTRoute - Comprehensive Testing Guide
 
-**Feature:** Universal Order Hub + Smart Delivery Management  
-**Version:** 1.0.0  
-**Last Updated:** October 2, 2026
+**Last Updated**: January 2026  
+**Version**: 1.0.0
 
 ---
 
-## Table of Contents
-1. [Test Environment Setup](#1-test-environment-setup)
-2. [User Test Accounts](#2-user-test-accounts)
-3. [Functional Testing](#3-functional-testing)
-4. [Security Testing](#4-security-testing)
-5. [Real-Time Updates Testing](#5-real-time-updates-testing)
-6. [Integration Testing](#6-integration-testing)
-7. [UI/UX Testing](#7-uiux-testing)
-8. [Performance Testing](#8-performance-testing)
-9. [Bug Reporting](#9-bug-reporting)
+## 📋 Table of Contents
+
+1. [Overview](#overview)
+2. [Testing Strategy](#testing-strategy)
+3. [Manual Testing](#manual-testing)
+4. [API Testing with Postman](#api-testing-with-postman)
+5. [Service Health Verification](#service-health-verification)
+6. [Authentication Flow Testing](#authentication-flow-testing)
+7. [End-to-End Scenarios](#end-to-end-scenarios)
+8. [Performance Testing](#performance-testing)
+9. [Security Testing](#security-testing)
+10. [Future Automated Testing](#future-automated-testing)
 
 ---
 
-## 1. Test Environment Setup
+## 🎯 Overview
+
+This guide provides comprehensive testing procedures for the SWIFTRoute microservices architecture. Since the project is in university/academic context, we focus on **manual testing** and **Postman-based API testing** rather than full automated test suites.
+
+### Testing Levels
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Level 1: Service Health Checks                         │
+│  └─ Verify all 9 services + database are running        │
+├─────────────────────────────────────────────────────────┤
+│  Level 2: Individual API Endpoint Testing               │
+│  └─ Test each microservice independently                │
+├─────────────────────────────────────────────────────────┤
+│  Level 3: Integration Testing                           │
+│  └─ Test service-to-service communication               │
+├─────────────────────────────────────────────────────────┤
+│  Level 4: End-to-End User Flows                        │
+│  └─ Complete user journeys through UI                   │
+├─────────────────────────────────────────────────────────┤
+│  Level 5: Security & Authorization                      │
+│  └─ Role-based access, JWT validation                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🧪 Testing Strategy
+
+### Quick Test Priorities
+
+For demonstration and grading purposes, focus on:
+
+1. **✅ Critical Path**: Customer books shipment → Track → Deliver
+2. **✅ Authentication**: Login, Google OAuth, JWT validation
+3. **✅ Authorization**: Role-based access (customer, agent, admin)
+4. **✅ Gateway Routing**: All APIs route through port 4000
+5. **✅ Database Operations**: CRUD operations work correctly
+
+### Testing Checklist
+
+```
+□ All services start successfully
+□ Database is accessible and seeded
+□ Gateway routes to all services
+□ Customer can register and login
+□ Agent can login
+□ Admin can login
+□ Google OAuth works
+□ Customer can book shipment
+□ Agent can view assignments
+□ Agent can update delivery status
+□ Admin can view dashboard
+□ Tracking works publicly
+□ Payments process correctly
+□ Notifications are created
+□ Role-based access is enforced
+```
+
+---
+
+## 🔧 Manual Testing
 
 ### Prerequisites
-```bash
-# Install dependencies
-npm install
 
-# Generate Prisma client
-npm run db:generate
+```powershell
+# Ensure all services are running
+.\check-services-health.ps1
 
-# Seed database (if needed)
-npm run db:seed
-
-# Start development server
-npm run dev
+# Or manually check
+curl http://localhost:4000/health
 ```
 
-### Environment Variables
-Verify `.env` file contains:
-```
-DATABASE_URL="file:./backend/database/datastore.json"
-JWT_SECRET="your-secret-key"
-SESSION_SECRET="your-session-secret"
-PORT=3000
-NODE_ENV="development"
-```
+### Test Environment Setup
 
-### Expected Server Output
-```
-✓ Database connection established
-✓ API Routes mounted
-✓ Server running on http://localhost:3000
-✓ Real-time service initialized
-```
+1. **Start All Services**
+   ```powershell
+   .\start-all-services.ps1
+   # Wait 15 seconds for all services to initialize
+   ```
 
----
+2. **Verify Database**
+   ```powershell
+   # Check database is seeded with roles
+   docker compose exec postgres psql -U postgres -d swiftroute_db -c "SELECT * FROM roles;"
+   ```
 
-## 2. User Test Accounts
-
-### Test Customer Accounts
-Create test accounts or use existing seeded data:
-
-**Customer 1:**
-- Email: `customer1@test.com`
-- Password: `password123`
-- Role: Customer
-- Use for: Primary testing account
-
-**Customer 2:**
-- Email: `customer2@test.com`
-- Password: `password123`
-- Role: Customer
-- Use for: Data isolation testing
-
-### Test Agent Account
-**Agent 1:**
-- Email: `agent1@test.com`
-- Password: `password123`
-- Role: Agent
-- Use for: Testing agent-side status updates
+3. **Access Application**
+   - Open browser to: http://localhost:4000
 
 ---
 
-## 3. Functional Testing
+## 📮 API Testing with Postman
 
-### 3.1 Universal Order Hub Dashboard
+### Import Postman Collection
 
-#### Test Case 1: View Order Hub Dashboard
-**Steps:**
-1. Login as Customer 1
-2. Navigate to "Universal Order Hub" from sidebar
-3. Verify dashboard loads successfully
+A Postman collection exists at `.postman/resources.yaml` or create one:
 
-**Expected Results:**
-- ✅ Dashboard displays with gradient hero section
-- ✅ Stats cards show: Total Orders, In Transit, Out for Delivery, Delivered, Returns, Attention Required
-- ✅ "Live" indicator shows connection status (green when connected)
-- ✅ Platform filter, status filter, search bar visible
-- ✅ Orders displayed in table view by default
-- ✅ Empty state shown if no orders exist
+### 1. Setup Postman Environment
 
-#### Test Case 2: Add External Order Manually
-**Steps:**
-1. Click "Add Order" button
-2. Fill in form:
-   - Platform: Amazon
-   - Order ID: AMZ-TEST-001
-   - Tracking Number: TRK123456789
-   - Product Name: Wireless Earbuds
-   - Product Category: Electronics
-   - Quantity: 1
-   - Order Amount: 2999
-   - Order Date: Today
-   - Delivery Address: 123 Test St, San Francisco, CA 94102
-   - Recipient Name: John Doe
-   - Recipient Phone: +1234567890
-3. Click "Add Order"
+Create environment with variables:
 
-**Expected Results:**
-- ✅ Modal closes
-- ✅ Success notification appears
-- ✅ New order appears in order list
-- ✅ Stats counters increment
-- ✅ Order shows correct platform badge (Amazon)
-- ✅ Order status is "ordered"
-
-#### Test Case 3: Import by Tracking Number
-**Steps:**
-1. Click "Track Shipment" button
-2. Enter tracking number: `TRACK-TEST-789`
-3. Select courier: FedEx
-4. Select platform: Flipkart
-5. Click "Import Order"
-
-**Expected Results:**
-- ✅ Modal closes
-- ✅ Order imported successfully
-- ✅ Order appears with tracking number
-- ✅ Status set to "in_transit"
-
-#### Test Case 4: Filter and Search
-**Steps:**
-1. Add multiple orders from different platforms
-2. Use status filter: Select "In Transit"
-3. Use platform filter: Select "Amazon"
-4. Use search: Enter product name
-
-**Expected Results:**
-- ✅ Filters work independently
-- ✅ Multiple filters combine correctly
-- ✅ Search works on order ID, tracking number, product name
-- ✅ No results state shows when no matches
-
-#### Test Case 5: Sort Orders
-**Steps:**
-1. Click sort dropdown
-2. Select "Sort by Platform"
-3. Toggle sort order (asc/desc)
-
-**Expected Results:**
-- ✅ Orders sort by platform alphabetically
-- ✅ Sort order toggles correctly
-- ✅ Date sorting works (newest/oldest)
-
-#### Test Case 6: View Modes
-**Steps:**
-1. Click grid view icon
-2. Verify grid view displays
-3. Click table view icon
-4. Verify table view displays
-
-**Expected Results:**
-- ✅ Grid view shows cards with product images
-- ✅ Table view shows compact row format
-- ✅ View preference persists during session
-
----
-
-### 3.2 Order Details & Tracking
-
-#### Test Case 7: View Order Details
-**Steps:**
-1. Click "View Details" on any order
-2. Verify OrderDetailsView opens
-
-**Expected Results:**
-- ✅ Modal/page displays with order information
-- ✅ Three tabs visible: Timeline, Details, Live Tracking
-- ✅ Timeline tab active by default
-- ✅ Delivery timeline shows progress
-- ✅ Current status highlighted
-- ✅ ETA displayed correctly
-
-#### Test Case 8: View Tracking Timeline
-**Steps:**
-1. Open order details
-2. Click "Timeline" tab
-3. Verify tracking events displayed
-
-**Expected Results:**
-- ✅ Events shown in chronological order
-- ✅ Each event has timestamp, location, description
-- ✅ Status icons match event type
-- ✅ Current status highlighted with animation
-
-#### Test Case 9: Copy Tracking Number
-**Steps:**
-1. Open order details
-2. Click "Copy" button next to tracking number
-
-**Expected Results:**
-- ✅ Tracking number copied to clipboard
-- ✅ Success toast notification appears
-- ✅ Button shows "Copied!" feedback
-
----
-
-### 3.3 Returns Management
-
-#### Test Case 10: Create Return Request
-**Steps:**
-1. Navigate to "Returns & Pickups" from sidebar
-2. Click "Request Return" button
-3. Fill in form:
-   - Select order: Choose from dropdown
-   - Product Name: Wireless Earbuds
-   - Reason: Defective/Not Working
-   - Description: Product stopped working after 2 days
-   - Pickup Address: Same as delivery
-4. Upload photos (optional)
-5. Click "Submit Return Request"
-
-**Expected Results:**
-- ✅ Return request created successfully
-- ✅ Return number generated (e.g., RET-20261002-001)
-- ✅ Status set to "requested"
-- ✅ Notification sent to customer
-- ✅ Return appears in returns list
-
-#### Test Case 11: View Return Requests
-**Steps:**
-1. Navigate to "Returns & Pickups"
-2. Verify returns list displays
-
-**Expected Results:**
-- ✅ All customer returns displayed
-- ✅ Stats cards show total, pending, in-progress, completed
-- ✅ Status badges color-coded correctly
-- ✅ Filter by status works
-- ✅ Search by return number works
-
-#### Test Case 12: Track Return Status
-**Steps:**
-1. Admin approves return (manual backend step)
-2. Refresh returns page
-3. Verify status changed to "approved"
-
-**Expected Results:**
-- ✅ Status badge updates
-- ✅ Real-time notification received
-- ✅ Return details show approval info
-
----
-
-### 3.4 Notifications
-
-#### Test Case 13: View Notifications
-**Steps:**
-1. Navigate to "Notifications" from sidebar
-2. Verify notification list displays
-
-**Expected Results:**
-- ✅ All notifications displayed
-- ✅ Priority color coding (high=red, medium=orange, low=blue)
-- ✅ Unread notifications highlighted
-- ✅ Unread count badge shows correct number
-- ✅ Filter tabs work (All, Unread, Orders, Returns)
-
-#### Test Case 14: Mark Notification as Read
-**Steps:**
-1. Click "Mark as Read" on unread notification
-
-**Expected Results:**
-- ✅ Notification marked as read
-- ✅ Visual style changes (opacity)
-- ✅ Unread count decrements
-- ✅ Checkmark icon appears
-
-#### Test Case 15: Mark All as Read
-**Steps:**
-1. Click "Mark All as Read" button
-
-**Expected Results:**
-- ✅ All notifications marked as read
-- ✅ Unread count goes to 0
-- ✅ Visual feedback provided
-
----
-
-### 3.5 Customer Analytics
-
-#### Test Case 16: View Analytics Dashboard
-**Steps:**
-1. Navigate to "My Analytics" from sidebar
-2. Verify analytics page loads
-
-**Expected Results:**
-- ✅ Performance metrics displayed:
-  - On-time delivery rate
-  - Average delivery time
-  - Successful deliveries
-  - Failed deliveries
-- ✅ Spending analysis shows:
-  - Total spent
-  - Average per order
-- ✅ Orders by platform chart displayed
-- ✅ Monthly trends chart shows order volume
-
-#### Test Case 17: Verify Metrics Accuracy
-**Steps:**
-1. Count delivered orders manually
-2. Compare with "Successful Deliveries" metric
-3. Check on-time delivery calculation
-
-**Expected Results:**
-- ✅ Metrics match actual order data
-- ✅ Percentages calculated correctly
-- ✅ Charts render without errors
-
----
-
-### 3.6 Delivery Preferences
-
-#### Test Case 18: View Delivery Preferences
-**Steps:**
-1. Navigate to "Delivery Preferences" from sidebar
-2. Verify preferences page loads
-
-**Expected Results:**
-- ✅ Preference toggles displayed:
-  - Contactless Delivery
-  - Leave at Door
-  - Signature Required
-  - Photo on Delivery
-- ✅ Delivery time window selector visible
-- ✅ Special instructions textarea visible
-- ✅ Current preferences loaded
-
-#### Test Case 19: Toggle Delivery Preference
-**Steps:**
-1. Toggle "Contactless Delivery" switch
-2. Wait for save confirmation
-
-**Expected Results:**
-- ✅ Toggle switch animates
-- ✅ Success notification appears
-- ✅ Preference saved to backend
-- ✅ Reload page shows updated preference
-
-#### Test Case 20: Set Delivery Time Window
-**Steps:**
-1. Select "Morning (9AM - 12PM)" option
-2. Click "Save Preferences"
-
-**Expected Results:**
-- ✅ Time window saved
-- ✅ Radio button selected
-- ✅ Success feedback shown
-
-#### Test Case 21: Add Special Instructions
-**Steps:**
-1. Enter in textarea: "Please ring doorbell twice"
-2. Click "Save Preferences"
-
-**Expected Results:**
-- ✅ Instructions saved
-- ✅ Text persists on page reload
-
----
-
-## 4. Security Testing
-
-### 4.1 Authentication Tests
-
-#### Test Case 22: Access Without Login
-**Steps:**
-1. Logout from application
-2. Try to access `/api/order-hub/orders` directly
-3. Try to access Order Hub page
-
-**Expected Results:**
-- ✅ API returns 401 Unauthorized
-- ✅ Frontend redirects to login page
-- ✅ No data exposed
-
-#### Test Case 23: Invalid Token
-**Steps:**
-1. Login normally
-2. Modify JWT token in localStorage
-3. Try to access Order Hub
-
-**Expected Results:**
-- ✅ API returns 401
-- ✅ User redirected to login
-- ✅ Token cleared
-
-#### Test Case 24: Suspended Account
-**Steps:**
-1. Admin suspends customer account
-2. Try to login
-3. Try to access with existing valid token
-
-**Expected Results:**
-- ✅ Login blocked with 403
-- ✅ API calls blocked with 403
-- ✅ Error message: "Your account is suspended"
-
----
-
-### 4.2 Authorization Tests
-
-#### Test Case 25: Customer Cannot Access Agent Functions
-**Steps:**
-1. Login as Customer
-2. Try to update parcel status (agent function)
-3. Verify API call to `/api/order-hub/orders/:id/status`
-
-**Expected Results:**
-- ✅ API returns 403 Forbidden
-- ✅ Error message indicates required role
-- ✅ No data modified
-
-#### Test Case 26: Agent Cannot Create External Orders
-**Steps:**
-1. Login as Agent
-2. Try to create external order
-
-**Expected Results:**
-- ✅ API returns 403
-- ✅ Button/form not visible in UI for agents
-
----
-
-### 4.3 Data Isolation Tests
-
-#### Test Case 27: Customer A Cannot See Customer B's Orders
-**Steps:**
-1. Login as Customer 1
-2. Create test order
-3. Note order ID
-4. Logout
-5. Login as Customer 2
-6. Try to access Customer 1's order via API
-7. View Order Hub dashboard
-
-**Expected Results:**
-- ✅ Customer 2 sees only their own orders
-- ✅ Customer 1's orders not visible
-- ✅ Direct API call returns 404 or empty
-- ✅ Stats reflect only Customer 2's data
-
-#### Test Case 28: Notifications Isolation
-**Steps:**
-1. Trigger notification for Customer 1
-2. Login as Customer 2
-3. View notifications
-
-**Expected Results:**
-- ✅ Customer 2 sees only their notifications
-- ✅ Customer 1's notifications not visible
-- ✅ Unread count accurate per customer
-
-#### Test Case 29: Returns Isolation
-**Steps:**
-1. Customer 1 creates return request
-2. Login as Customer 2
-3. View returns page
-
-**Expected Results:**
-- ✅ Customer 2 sees only their returns
-- ✅ Customer 1's returns not visible
-
----
-
-### 4.4 Input Validation Tests
-
-#### Test Case 30: SQL Injection Prevention
-**Steps:**
-1. Try to create order with payload:
-   - Product Name: `'; DROP TABLE orders; --`
-   - Order ID: `1' OR '1'='1`
-
-**Expected Results:**
-- ✅ Input sanitized or rejected
-- ✅ No database errors
-- ✅ No unauthorized data access
-
-#### Test Case 31: XSS Prevention
-**Steps:**
-1. Try to create order with:
-   - Product Name: `<script>alert('XSS')</script>`
-   - Description: `<img src=x onerror=alert(1)>`
-
-**Expected Results:**
-- ✅ Script tags not executed
-- ✅ HTML encoded properly
-- ✅ No JavaScript alerts trigger
-
-#### Test Case 32: Missing Required Fields
-**Steps:**
-1. Try to create order without product name
-2. Try to create return without reason
-
-**Expected Results:**
-- ✅ API returns 422 Unprocessable Entity
-- ✅ Error message indicates missing fields
-- ✅ Frontend validation prevents submission
-
----
-
-## 5. Real-Time Updates Testing
-
-### 5.1 SSE Connection Tests
-
-#### Test Case 33: Establish Real-Time Connection
-**Steps:**
-1. Login as Customer
-2. Navigate to Order Hub
-3. Open browser DevTools > Network
-4. Look for `realtime/stream` EventSource connection
-
-**Expected Results:**
-- ✅ "Live" indicator shows green with Wifi icon
-- ✅ SSE connection established successfully
-- ✅ Connected event received
-- ✅ Periodic ping events visible
-
-#### Test Case 34: Reconnect After Disconnect
-**Steps:**
-1. Establish connection
-2. Disconnect network
-3. Reconnect network
-4. Wait for auto-reconnect
-
-**Expected Results:**
-- ✅ "Live" indicator turns gray/offline
-- ✅ Auto-reconnect attempts occur
-- ✅ Connection restored when network available
-- ✅ No errors in console
-
----
-
-### 5.2 Real-Time Event Tests
-
-#### Test Case 35: Order Status Update
-**Steps:**
-1. Customer 1 logged in with Order Hub open
-2. Agent updates order status (via agent portal)
-3. Observe Customer 1's dashboard
-
-**Expected Results:**
-- ✅ Order status updates immediately (no refresh needed)
-- ✅ Real-time notification received
-- ✅ Dashboard stats update automatically
-- ✅ "Live" indicator confirms connection
-
-#### Test Case 36: Return Status Update
-**Steps:**
-1. Customer has pending return request
-2. Admin approves return
-3. Observe customer's returns page
-
-**Expected Results:**
-- ✅ Return status changes from "requested" to "approved"
-- ✅ Real-time notification shows approval
-- ✅ Stats update automatically
-- ✅ No page refresh required
-
-#### Test Case 37: New Notification
-**Steps:**
-1. Customer viewing Order Hub
-2. Trigger notification (via backend or admin action)
-3. Observe notification center
-
-**Expected Results:**
-- ✅ Unread count badge increments
-- ✅ Notification appears in list without refresh
-- ✅ Visual/audio alert (if implemented)
-- ✅ Real-time event logged in DevTools
-
-#### Test Case 38: Multi-Tab Sync
-**Steps:**
-1. Open Order Hub in two browser tabs
-2. Trigger status update in backend
-3. Observe both tabs
-
-**Expected Results:**
-- ✅ Both tabs receive update simultaneously
-- ✅ Both tabs show updated data
-- ✅ Two SSE connections visible in Network tab
-
----
-
-## 6. Integration Testing
-
-### 6.1 Agent-Customer Integration
-
-#### Test Case 39: Agent Updates Parcel Status
-**Steps:**
-1. Customer 1 has SwiftRoute parcel
-2. Agent updates status to "out_for_delivery"
-3. Customer 1 viewing Order Hub
-
-**Expected Results:**
-- ✅ Customer sees real-time update
-- ✅ Parcel status changes in Order Hub
-- ✅ Notification created for customer
-- ✅ Stats reflect new status
-
-#### Test Case 40: Agent Delivers Parcel
-**Steps:**
-1. Agent marks parcel as "delivered"
-2. Agent uploads delivery proof
-3. Customer views order details
-
-**Expected Results:**
-- ✅ Status updates to "delivered"
-- ✅ Delivery proof visible
-- ✅ Delivered count increments in stats
-- ✅ Notification sent to customer
-
----
-
-### 6.2 Platform Integration
-
-#### Test Case 41: Mixed Orders Display
-**Steps:**
-1. Customer has:
-   - 2 SwiftRoute parcels
-   - 3 Amazon orders
-   - 1 Flipkart order
-2. View Order Hub
-
-**Expected Results:**
-- ✅ All orders display in unified list
-- ✅ Platform badges show correct icons/colors
-- ✅ Filter by platform works for all types
-- ✅ Total orders count = 6
-
----
-
-## 7. UI/UX Testing
-
-### 7.1 Visual Design Tests
-
-#### Test Case 42: Responsive Design
-**Steps:**
-1. Test on desktop (1920x1080)
-2. Test on tablet (768px width)
-3. Test on mobile (375px width)
-
-**Expected Results:**
-- ✅ Layout adapts to screen size
-- ✅ No horizontal scrolling
-- ✅ Touch targets appropriately sized
-- ✅ All features accessible on mobile
-
-#### Test Case 43: Dark Mode (if implemented)
-**Steps:**
-1. Toggle dark mode
-2. Navigate through all pages
-
-**Expected Results:**
-- ✅ All components support dark mode
-- ✅ Colors meet contrast requirements
-- ✅ Gradients work in dark mode
-
-### 7.2 Usability Tests
-
-#### Test Case 44: Navigation Flow
-**Steps:**
-1. Start at Order Hub
-2. Navigate to each section:
-   - Returns
-   - Notifications
-   - Analytics
-   - Preferences
-   - Back to Order Hub
-
-**Expected Results:**
-- ✅ Navigation clear and intuitive
-- ✅ Active nav item highlighted
-- ✅ Breadcrumbs show current location
-- ✅ No broken links
-
-#### Test Case 45: Loading States
-**Steps:**
-1. Refresh Order Hub page
-2. Observe loading behavior
-
-**Expected Results:**
-- ✅ Skeleton loaders display
-- ✅ No content flash
-- ✅ Smooth transition to loaded state
-- ✅ Loading indicators for API calls
-
-#### Test Case 46: Empty States
-**Steps:**
-1. New customer with no orders
-2. View each section
-
-**Expected Results:**
-- ✅ Friendly empty state messages
-- ✅ Clear call-to-action
-- ✅ Helpful instructions
-- ✅ No error messages
-
-#### Test Case 47: Error Handling
-**Steps:**
-1. Disconnect network
-2. Try to create order
-3. Reconnect and retry
-
-**Expected Results:**
-- ✅ Error message displayed
-- ✅ No app crash
-- ✅ Retry option available
-- ✅ Success after reconnect
-
----
-
-## 8. Performance Testing
-
-### 8.1 Load Testing
-
-#### Test Case 48: Large Dataset
-**Steps:**
-1. Create 100+ orders for customer
-2. Load Order Hub
-3. Test filters and search
-
-**Expected Results:**
-- ✅ Page loads within 3 seconds
-- ✅ Scrolling remains smooth
-- ✅ Filters respond instantly
-- ✅ No browser freezing
-
-#### Test Case 49: Real-Time Stress Test
-**Steps:**
-1. Open 10 browser tabs as same customer
-2. Trigger multiple rapid status updates
-
-**Expected Results:**
-- ✅ All tabs receive updates
-- ✅ No connection drops
-- ✅ Server handles multiple SSE connections
-- ✅ No memory leaks
-
----
-
-## 9. Bug Reporting
-
-### Bug Report Template
-When reporting bugs, include:
-
-```markdown
-**Bug Title:** [Short descriptive title]
-
-**Priority:** [Critical/High/Medium/Low]
-
-**Environment:**
-- Browser: [Chrome 120/Firefox 119/Safari 17]
-- OS: [Windows 11/macOS 14/Ubuntu 22]
-- Screen Size: [1920x1080]
-
-**Steps to Reproduce:**
-1. Login as customer
-2. Navigate to Order Hub
-3. Click "Add Order"
-4. [specific action]
-
-**Expected Result:**
-[What should happen]
-
-**Actual Result:**
-[What actually happened]
-
-**Screenshots:**
-[Attach screenshots if applicable]
-
-**Console Errors:**
-```
-[Any errors from browser console]
+```json
+{
+  "GATEWAY_URL": "http://localhost:4000",
+  "AUTH_TOKEN": "",
+  "USER_ID": "",
+  "PARCEL_ID": "",
+  "TRACKING_NUMBER": ""
+}
 ```
 
-**Additional Context:**
-[Any other relevant information]
+### 2. Test Authentication Endpoints
+
+#### Register Customer
+
+```http
+POST {{GATEWAY_URL}}/api/auth/register
+Content-Type: application/json
+
+{
+  "full_name": "Test Customer",
+  "email": "testcustomer@example.com",
+  "password": "Test123!",
+  "phone": "1234567890"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGc...",
+    "user": {
+      "id": "...",
+      "email": "testcustomer@example.com",
+      "role": "customer"
+    }
+  }
+}
+```
+
+**Action**: Save `token` to `AUTH_TOKEN` environment variable.
+
+#### Login
+
+```http
+POST {{GATEWAY_URL}}/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "testcustomer@example.com",
+  "password": "Test123!"
+}
+```
+
+#### Get Current User
+
+```http
+GET {{GATEWAY_URL}}/api/auth/me
+Authorization: Bearer {{AUTH_TOKEN}}
+```
+
+### 3. Test Order/Shipment Endpoints
+
+#### Book a Shipment
+
+```http
+POST {{GATEWAY_URL}}/api/parcels
+Authorization: Bearer {{AUTH_TOKEN}}
+Content-Type: application/json
+
+{
+  "recipient_name": "John Doe",
+  "recipient_phone": "9876543210",
+  "pickup_address": "123 Main St, San Francisco, CA 94102",
+  "delivery_address": "456 Oak Ave, Los Angeles, CA 90001",
+  "weight_kg": 2.5,
+  "parcel_type": "standard",
+  "special_instructions": "Handle with care"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "...",
+    "tracking_number": "SR-2026CA-ABC123",
+    "status": "pending",
+    "shipping_cost": 15.24
+  }
+}
+```
+
+**Action**: Save `tracking_number` to environment variable.
+
+#### Get Parcels
+
+```http
+GET {{GATEWAY_URL}}/api/parcels
+Authorization: Bearer {{AUTH_TOKEN}}
+```
+
+#### Track Parcel (Public - No Auth)
+
+```http
+GET {{GATEWAY_URL}}/api/tracking/{{TRACKING_NUMBER}}
+```
+
+### 4. Test Admin Endpoints
+
+#### Login as Admin
+
+```http
+POST {{GATEWAY_URL}}/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "admin@swiftroute.com",
+  "password": "Admin@123"
+}
+```
+
+#### Get Dashboard Stats
+
+```http
+GET {{GATEWAY_URL}}/api/admin/stats
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+#### Get All Users
+
+```http
+GET {{GATEWAY_URL}}/api/admin/users
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 5. Test Payment Endpoints
+
+#### Process Payment
+
+```http
+POST {{GATEWAY_URL}}/api/payments/checkout
+Authorization: Bearer {{AUTH_TOKEN}}
+Content-Type: application/json
+
+{
+  "parcel_id": "{{PARCEL_ID}}",
+  "payment_method": "credit_card"
+}
+```
+
+#### Get Payment History
+
+```http
+GET {{GATEWAY_URL}}/api/payments/history
+Authorization: Bearer {{AUTH_TOKEN}}
+```
+
+### 6. Test Notification Endpoints
+
+#### Get Notifications
+
+```http
+GET {{GATEWAY_URL}}/api/order-hub/notifications
+Authorization: Bearer {{AUTH_TOKEN}}
+```
+
+#### Mark Notification as Read
+
+```http
+PATCH {{GATEWAY_URL}}/api/order-hub/notifications/{{NOTIFICATION_ID}}/read
+Authorization: Bearer {{AUTH_TOKEN}}
 ```
 
 ---
 
-## 10. Test Completion Checklist
+## ✅ Service Health Verification
 
-### Functional Tests
-- [ ] Dashboard displays correctly
-- [ ] Add external order works
-- [ ] Import tracking number works
-- [ ] Filters and search work
-- [ ] Sort functionality works
-- [ ] View modes (table/grid) work
-- [ ] Order details display correctly
-- [ ] Returns management works
-- [ ] Notifications system works
-- [ ] Analytics display correctly
-- [ ] Delivery preferences save correctly
+### Automated Health Check Script
 
-### Security Tests
-- [ ] Authentication required for all endpoints
-- [ ] Customer A cannot access Customer B's data
-- [ ] Role-based authorization enforced
-- [ ] Input validation prevents injection
-- [ ] Suspended accounts blocked
+Use the provided script:
 
-### Real-Time Tests
-- [ ] SSE connection establishes
-- [ ] Order updates received in real-time
-- [ ] Return updates received in real-time
-- [ ] Notifications arrive instantly
-- [ ] Multi-tab sync works
+```powershell
+.\check-services-health.ps1
+```
 
-### UI/UX Tests
-- [ ] Responsive on all screen sizes
-- [ ] Loading states display correctly
-- [ ] Empty states are user-friendly
-- [ ] Error handling works properly
-- [ ] Navigation is intuitive
+### Manual Health Checks
 
-### Performance Tests
-- [ ] Handles 100+ orders efficiently
-- [ ] Real-time updates don't cause lag
-- [ ] No memory leaks detected
+```powershell
+# Gateway
+curl http://localhost:4000/health
 
----
+# Monolith
+curl http://localhost:3000/api/health
 
-## Test Results Summary
+# Auth Service
+curl http://localhost:4001/health
 
-**Date Tested:** _____________  
-**Tester Name:** _____________  
-**Total Tests:** 49  
-**Passed:** ___  
-**Failed:** ___  
-**Blocked:** ___
+# Order Service
+curl http://localhost:4003/health
 
-**Overall Status:** [ ] PASS [ ] FAIL [ ] NEEDS REVIEW
+# Shipment Service
+curl http://localhost:4004/health
 
-**Comments:**
-_________________________________________________________________
-_________________________________________________________________
-_________________________________________________________________
+# Delivery Service
+curl http://localhost:4005/health
+
+# Payment Service
+curl http://localhost:4006/health
+
+# Notification Service
+curl http://localhost:4007/health
+
+# Admin Service
+curl http://localhost:4008/health
+```
+
+**All should return:**
+```json
+{
+  "service": "service-name",
+  "status": "ok",
+  "timestamp": "2026-01-20T..."
+}
+```
 
 ---
 
-**Document Version:** 1.0.0  
-**Last Updated:** October 2, 2026
+## 🔐 Authentication Flow Testing
+
+### Test Case 1: Customer Registration & Login
+
+**Steps:**
+1. Navigate to http://localhost:4000
+2. Click "Get Started" or "Login"
+3. Click "Create Account"
+4. Fill in registration form
+5. Submit
+6. Verify redirected to Customer Portal
+
+**Expected Results:**
+- ✅ User is registered in database
+- ✅ JWT token is issued
+- ✅ Token stored in localStorage
+- ✅ Redirected to `/customer/order-hub`
+
+### Test Case 2: Google OAuth Login
+
+**Steps:**
+1. Navigate to http://localhost:4000/auth
+2. Click "Continue with Google"
+3. Select Google account
+4. Authorize application
+
+**Expected Results:**
+- ✅ Redirected to Google login
+- ✅ Redirected back with token
+- ✅ User created in database (if new)
+- ✅ Logged in and redirected to Customer Portal
+
+### Test Case 3: Agent Login
+
+**Steps:**
+1. Register as agent or use seeded agent account
+2. Navigate to http://localhost:4000/auth
+3. Enter agent credentials
+4. Submit
+
+**Expected Results:**
+- ✅ Login successful
+- ✅ Redirected to `/agent` (Agent Dashboard)
+- ✅ Cannot access customer routes
+
+### Test Case 4: Admin Login
+
+**Steps:**
+1. Navigate to http://localhost:4000/auth
+2. Enter: `admin@swiftroute.com` / `Admin@123`
+3. Submit
+
+**Expected Results:**
+- ✅ Login successful
+- ✅ Redirected to `/admin` (Admin Dashboard)
+- ✅ Can access all admin routes
+
+---
+
+## 🛤️ End-to-End Scenarios
+
+### Scenario 1: Complete Shipment Lifecycle
+
+**Actors**: Customer, Delivery Agent, Admin
+
+**Steps:**
+
+1. **Customer Books Shipment**
+   ```
+   Customer Portal → Book Shipment
+   Fill form → Submit
+   Verify: Tracking number generated
+   Verify: Status = "Pending"
+   Verify: Payment status = "Unpaid"
+   ```
+
+2. **Customer Makes Payment**
+   ```
+   Customer Portal → Payments & Invoices
+   Select unpaid shipment → Pay Now
+   Verify: Payment processed
+   Verify: Payment status = "Paid"
+   ```
+
+3. **Admin Assigns Agent**
+   ```
+   Admin Portal → Parcels
+   Select parcel → Assign Agent
+   Choose agent → Assign
+   Verify: Status = "Assigned"
+   Verify: Agent notified
+   ```
+
+4. **Agent Picks Up Parcel**
+   ```
+   Agent Portal → My Assignments
+   Select parcel → Update Status
+   Status = "Picked Up" → Update
+   Verify: Tracking history updated
+   ```
+
+5. **Agent Delivers Parcel**
+   ```
+   Agent Portal → Delivery
+   Select parcel → Mark Delivered
+   Upload proof → Submit
+   Verify: Status = "Delivered"
+   Verify: Customer notified
+   ```
+
+6. **Customer Views Tracking**
+   ```
+   Public Tracking Page
+   Enter tracking number
+   Verify: Full tracking history shown
+   Verify: Delivery proof visible
+   ```
+
+**Expected Database State:**
+- Parcel record created
+- Payment record created
+- Delivery proof record created
+- Tracking history records (5+ entries)
+- Notifications created
+- Agent stats updated
+
+### Scenario 2: Role-Based Access Control
+
+**Test Unauthorized Access:**
+
+1. **Customer tries to access Admin routes**
+   ```
+   Login as customer
+   Navigate to http://localhost:4000/admin
+   Expected: Redirected to /customer/order-hub
+   ```
+
+2. **Agent tries to access Customer orders**
+   ```
+   Login as agent
+   Try to view another customer's parcel
+   Expected: 403 Forbidden
+   ```
+
+3. **Unauthenticated user tries protected route**
+   ```
+   No login
+   Navigate to http://localhost:4000/customer
+   Expected: Redirected to /auth
+   ```
+
+### Scenario 3: External Order Management
+
+**Test Universal Order Hub:**
+
+1. **Import External Tracking Number**
+   ```
+   Customer Portal → Order Hub
+   Import Tracking → Enter tracking number
+   Platform = "USPS" → Import
+   Verify: External order created
+   ```
+
+2. **Create Return Request**
+   ```
+   Order Hub → Returns
+   Select order → Request Return
+   Fill reason → Submit
+   Verify: Return request created
+   ```
+
+3. **Set Delivery Preferences**
+   ```
+   Order Hub → Preferences
+   Enable "Leave at door"
+   Save
+   Verify: Preference saved
+   ```
+
+---
+
+## ⚡ Performance Testing
+
+### Load Testing (Basic)
+
+For academic purposes, basic load testing:
+
+1. **Concurrent Users Simulation**
+   ```powershell
+   # Simple load test with curl
+   1..100 | ForEach-Object -Parallel {
+       curl http://localhost:4000/api/health
+   } -ThrottleLimit 10
+   ```
+
+2. **Response Time Measurement**
+   ```powershell
+   Measure-Command {
+       curl http://localhost:4000/api/parcels -H "Authorization: Bearer $token"
+   }
+   ```
+
+### Expected Performance
+
+- Health check: < 100ms
+- Login: < 500ms
+- Book shipment: < 1000ms
+- Get parcels list: < 500ms
+- Dashboard stats: < 1000ms
+
+### Gateway Rate Limiting Test
+
+```powershell
+# Test rate limiting - should fail after 300 requests
+1..350 | ForEach-Object {
+    curl http://localhost:4000/api/health
+}
+# Should see 429 Too Many Requests after ~300
+```
+
+---
+
+## 🔒 Security Testing
+
+### Test Case 1: JWT Validation
+
+```powershell
+# Try with invalid token
+curl http://localhost:4000/api/parcels `
+  -H "Authorization: Bearer invalid-token"
+
+# Expected: 401 Unauthorized
+```
+
+### Test Case 2: SQL Injection Prevention
+
+```powershell
+# Try SQL injection in search
+curl "http://localhost:4000/api/parcels?search=' OR '1'='1" `
+  -H "Authorization: Bearer $token"
+
+# Expected: Safe query, no database breach
+```
+
+### Test Case 3: XSS Prevention
+
+Register user with malicious name:
+```json
+{
+  "full_name": "<script>alert('XSS')</script>",
+  "email": "xss@test.com",
+  "password": "Test123!"
+}
+```
+
+**Expected**: Script tags sanitized or escaped in responses.
+
+### Test Case 4: CORS Validation
+
+```javascript
+// From different origin
+fetch('http://localhost:4000/api/health', {
+  method: 'GET',
+  mode: 'cors'
+}).then(r => r.json()).then(console.log);
+
+// Expected: CORS headers present, request allowed
+```
+
+---
+
+## 🚀 Future Automated Testing
+
+For production or future enhancement, consider:
+
+### Unit Tests (Example)
+
+```typescript
+// Example: services/auth-service/tests/authService.test.ts
+import { describe, it, expect } from 'vitest';
+import { hashPassword, comparePassword } from '../src/services/authService';
+
+describe('Auth Service', () => {
+  it('should hash password', async () => {
+    const password = 'Test123!';
+    const hash = await hashPassword(password);
+    expect(hash).not.toBe(password);
+    expect(hash.length).toBeGreaterThan(50);
+  });
+
+  it('should compare password with hash', async () => {
+    const password = 'Test123!';
+    const hash = await hashPassword(password);
+    const isMatch = await comparePassword(password, hash);
+    expect(isMatch).toBe(true);
+  });
+});
+```
+
+### Integration Tests (Example)
+
+```typescript
+// Example: tests/integration/parcel.test.ts
+import { describe, it, expect, beforeAll } from 'vitest';
+import request from 'supertest';
+
+describe('Parcel API Integration', () => {
+  let authToken: string;
+
+  beforeAll(async () => {
+    // Login and get token
+    const res = await request('http://localhost:4000')
+      .post('/api/auth/login')
+      .send({ identifier: 'test@example.com', password: 'Test123!' });
+    authToken = res.body.data.token;
+  });
+
+  it('should book a parcel', async () => {
+    const res = await request('http://localhost:4000')
+      .post('/api/parcels')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        recipient_name: 'Test Recipient',
+        recipient_phone: '1234567890',
+        pickup_address: 'Test Pickup',
+        delivery_address: 'Test Delivery',
+        weight_kg: 2.5
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.tracking_number).toMatch(/SR-\d{4}CA-/);
+  });
+});
+```
+
+### E2E Tests with Playwright (Example)
+
+```typescript
+// Example: tests/e2e/customer-flow.spec.ts
+import { test, expect } from '@playwright/test';
+
+test('customer can book shipment', async ({ page }) => {
+  // Navigate to app
+  await page.goto('http://localhost:4000');
+
+  // Login
+  await page.click('text=Login');
+  await page.fill('[name=email]', 'test@example.com');
+  await page.fill('[name=password]', 'Test123!');
+  await page.click('button:has-text("Sign In")');
+
+  // Wait for customer portal
+  await expect(page).toHaveURL(/\/customer/);
+
+  // Book shipment
+  await page.click('text=Book Shipment');
+  await page.fill('[name=recipient_name]', 'John Doe');
+  await page.fill('[name=recipient_phone]', '9876543210');
+  // ... fill other fields
+  await page.click('button:has-text("Book Shipment")');
+
+  // Verify success
+  await expect(page.locator('text=Shipment booked successfully')).toBeVisible();
+});
+```
+
+---
+
+## 📊 Test Coverage Goals
+
+For a complete production system:
+
+- **Unit Tests**: 80%+ code coverage
+- **Integration Tests**: All API endpoints
+- **E2E Tests**: Critical user flows
+- **Performance Tests**: Load, stress, spike testing
+- **Security Tests**: OWASP Top 10 vulnerabilities
+
+For this academic/university project:
+
+- **Manual Testing**: All critical flows ✅
+- **Postman Collection**: All API endpoints ✅
+- **Health Checks**: All services ✅
+- **Role-Based Access**: Verified ✅
+
+---
+
+## ✅ Testing Checklist for Demonstration
+
+Before presenting/grading:
+
+### Infrastructure
+- [ ] All 9 services start without errors
+- [ ] Database is accessible
+- [ ] Health checks pass for all services
+- [ ] Gateway routes correctly
+
+### Authentication
+- [ ] Customer registration works
+- [ ] Customer login works
+- [ ] Agent login works
+- [ ] Admin login works
+- [ ] Google OAuth works (if configured)
+- [ ] JWT validation works
+
+### Customer Flow
+- [ ] Book shipment
+- [ ] View my shipments
+- [ ] Track shipment
+- [ ] Make payment
+- [ ] View payment history
+- [ ] View notifications
+
+### Agent Flow
+- [ ] View assignments
+- [ ] Update delivery status
+- [ ] Submit delivery proof
+- [ ] Cannot access customer data
+
+### Admin Flow
+- [ ] View dashboard with stats
+- [ ] View all users
+- [ ] View all parcels
+- [ ] Assign agent to parcel
+- [ ] Verify courier
+- [ ] Cannot be accessed by non-admins
+
+### Security
+- [ ] Role-based access enforced
+- [ ] Invalid tokens rejected
+- [ ] Cross-role access blocked
+- [ ] SQL injection prevented
+
+---
+
+## 📚 Additional Resources
+
+- **Postman Collection**: `.postman/resources.yaml`
+- **Startup Guide**: `MICROSERVICES_STARTUP_GUIDE.md`
+- **Docker Guide**: `DOCKER_DEPLOYMENT_GUIDE.md`
+- **API Documentation**: Each service has `/health` endpoint
+
+---
+
+**Version**: 1.0.0  
+**Last Updated**: January 2026  
+**Status**: ✅ Ready for Testing

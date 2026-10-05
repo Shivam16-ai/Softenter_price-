@@ -1,0 +1,233 @@
+version: '3.9'
+
+# =============================================================================
+# SwiftRoute — Microservices Docker Compose
+# =============================================================================
+#
+# Port Map:
+#   4000 — API Gateway    (entry point for ALL frontend requests)
+#   3000 — Monolith       (React SPA + Vite + AI assistant + realtime)
+#   4001 — Auth Service
+#   4003 — Order Service
+#   4004 — Shipment Service
+#   4005 — Delivery Service
+#   4006 — Payment Service
+#   4007 — Notification Service
+#   4008 — Admin Service
+#   5432 — PostgreSQL
+#
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up gateway      # Start gateway only
+#   docker compose logs -f auth    # Follow auth logs
+#   docker compose down -v         # Stop + remove volumes
+
+services:
+
+  # ─── Database ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: swiftroute-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: swiftroute_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Monolith (React SPA + remaining routes) ──────────────────────────────
+  monolith:
+    build:
+      context: .
+      dockerfile: Dockerfile.monolith
+    container_name: swiftroute-monolith
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Auth Service (port 4001) ──────────────────────────────────────────────
+  auth:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-auth
+    environment:
+      PORT: 4001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Order Service (port 4003) ────────────────────────────────────────────
+  order:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-order
+    environment:
+      PORT: 4003
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      NOTIFICATION_SERVICE_URL: http://notification:4007
+    ports:
+      - "4003:4003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Shipment Service (port 4004) ─────────────────────────────────────────
+  shipment:
+    build:
+      context: ./services/shipment-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-shipment
+    environment:
+      PORT: 4004
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      NOTIFICATION_SERVICE_URL: http://notification:4007
+    ports:
+      - "4004:4004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Delivery Service (port 4005) ─────────────────────────────────────────
+  delivery:
+    build:
+      context: ./services/delivery-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-delivery
+    environment:
+      PORT: 4005
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      NOTIFICATION_SERVICE_URL: http://notification:4007
+    ports:
+      - "4005:4005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Payment Service (port 4006) ──────────────────────────────────────────
+  payment:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-payment
+    environment:
+      PORT: 4006
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "4006:4006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Notification Service (port 4007) ─────────────────────────────────────
+  notification:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-notification
+    environment:
+      PORT: 4007
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "4007:4007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Admin Service (port 4008) ────────────────────────────────────────────
+  admin:
+    build:
+      context: ./services/admin-service
+      dockerfile: Dockerfile
+    container_name: swiftroute-admin
+    environment:
+      PORT: 4008
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/swiftroute_db?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "4008:4008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── API Gateway (port 4000) ──────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: swiftroute-gateway
+    environment:
+      PORT: 4000
+      MONOLITH_URL: http://monolith:3000
+      AUTH_SERVICE_URL: http://auth:4001
+      ORDER_SERVICE_URL: http://order:4003
+      SHIPMENT_SERVICE_URL: http://shipment:4004
+      DELIVERY_SERVICE_URL: http://delivery:4005
+      PAYMENT_SERVICE_URL: http://payment:4006
+      NOTIFICATION_SERVICE_URL: http://notification:4007
+      ADMIN_SERVICE_URL: http://admin:4008
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:4000
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 300
+    ports:
+      - "4000:4000"
+    depends_on:
+      - monolith
+      - auth
+      - order
+      - shipment
+      - delivery
+      - payment
+      - notification
+      - admin
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

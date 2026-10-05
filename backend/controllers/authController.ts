@@ -12,6 +12,7 @@ import { logActivity } from '../services/activityService';
 import { User, UserRole } from '../../shared/types';
 import passport from '../config/passport';
 import * as userService from '../services/userService';
+import { mapPrismaUserToLegacy } from '../config/passport';
 
 const SECURE_DOCS_DIR = path.resolve(process.cwd(), 'backend/secure_storage/documents');
 if (!fs.existsSync(SECURE_DOCS_DIR)) {
@@ -42,70 +43,100 @@ export const register = async (req: Request, res: Response) => {
       return sendError(res, 'Password must be at least 6 characters long', 422);
     }
 
-    const users = db.getTable('users');
-    const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    // Check if user exists in Prisma
+    const existing = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { role: true, customerProfile: true },
+    });
+
     if (existing) {
       // If the account was created via Google OAuth and has no password yet, allow setting the password
-      if (!existing.password_hash || existing.password_hash.trim() === '') {
+      if (!existing.passwordHash || existing.passwordHash.trim() === '') {
         const password_hash = await hashPassword(password);
-        const updates: any = { password_hash };
-        if (full_name) updates.full_name = full_name;
+        const updates: any = { passwordHash: password_hash };
+        if (full_name) updates.fullName = full_name;
         if (phone) updates.phone = phone;
         if (address) updates.address = address;
-        db.update('users', existing.id, updates);
+        
+        const updatedUser = await prisma.user.update({
+          where: { id: existing.id },
+          data: updates,
+          include: { role: true, customerProfile: true },
+        });
 
+        const mappedUser = mapPrismaUserToLegacy(updatedUser);
         const token = jwt.sign(
-          { id: existing.id, email: existing.email, role: existing.role },
+          { id: mappedUser.id, email: mappedUser.email, role: mappedUser.role },
           config.jwtSecret,
           { expiresIn: '7d' }
         );
 
         logActivity(
-          { id: existing.id, full_name: updates.full_name || existing.full_name, role: existing.role },
+          { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
           'USER_PASSWORD_SET',
           'user',
-          existing.id,
-          `Password established for account: ${existing.email}`
+          mappedUser.id,
+          `Password established for account: ${mappedUser.email}`
         );
 
-        const { password_hash: _, ...safeUser } = { ...existing, ...updates };
-        return sendSuccess(res, { token, user: safeUser }, 'Password set and registered successfully! You can now log in with your email and password.', 200);
+        return sendSuccess(res, { token, user: mappedUser }, 'Password set and registered successfully! You can now log in with your email and password.', 200);
       }
       return sendError(res, 'An account with this email address already exists. Please log in or use Forgot Password.', 409);
     }
 
+    // Get customer role
+    const customerRole = await prisma.role.findUnique({
+      where: { code: 'CUSTOMER' },
+    });
+
+    if (!customerRole) {
+      return sendError(res, 'System configuration error. Please contact support.', 500);
+    }
+
+    // Create new customer user with Prisma
     const password_hash = await hashPassword(password);
-    const newUser: User & { password_hash: string } = {
-      id: `usr_cust_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      full_name: full_name.trim(),
-      email: email.toLowerCase().trim(),
-      password_hash,
-      role: 'customer',
-      phone: phone.trim(),
-      address: address ? address.trim() : '',
-      status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    const newUser = await prisma.user.create({
+      data: {
+        email: email.toLowerCase().trim(),
+        passwordHash: password_hash,
+        fullName: full_name.trim(),
+        phone: phone.trim(),
+        address: address ? address.trim() : '',
+        roleId: customerRole.id,
+        status: 'ACTIVE',
+        isEmailVerified: false,
+      },
+      include: { role: true },
+    });
 
-    db.insert('users', newUser);
+    // Create customer profile
+    await prisma.customer.create({
+      data: {
+        userId: newUser.id,
+        accountType: 'INDIVIDUAL',
+        creditLimit: 0,
+        currentBalance: 0,
+        paymentTermsDays: 0,
+        customDiscountPercent: 0,
+      },
+    });
 
+    const mappedUser = mapPrismaUserToLegacy(newUser);
     const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, role: newUser.role },
+      { id: mappedUser.id, email: mappedUser.email, role: mappedUser.role },
       config.jwtSecret,
       { expiresIn: '7d' }
     );
 
     logActivity(
-      { id: newUser.id, full_name: newUser.full_name, role: newUser.role },
+      { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
       'USER_REGISTERED',
       'user',
-      newUser.id,
-      `New customer registered: ${newUser.full_name} (${newUser.email})`
+      mappedUser.id,
+      `New customer registered: ${mappedUser.full_name} (${mappedUser.email})`
     );
 
-    const { password_hash: _, ...safeUser } = newUser;
-    return sendSuccess(res, { token, user: safeUser }, 'Account successfully registered', 201);
+    return sendSuccess(res, { token, user: mappedUser }, 'Account successfully registered', 201);
   } catch (error: any) {
     return sendError(res, error.message || 'Registration failed', 500);
   }
@@ -151,26 +182,42 @@ export const registerAgent = async (req: Request, res: Response) => {
     const normalizedEmpId = employee_id.trim().toUpperCase();
     const normalizedVehicle = vehicle_number.trim().toUpperCase().replace(/\s+/g, '');
 
-    const users = db.getTable('users');
+    // 2. Duplicate Checks using Prisma
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
 
-    // 2. Duplicate Checks
-    if (users.some(u => u.email.toLowerCase() === normalizedEmail || (u.company_email && u.company_email.toLowerCase() === normalizedEmail))) {
+    if (existingUser) {
       return sendError(res, 'An account with this email address already exists.', 409);
     }
 
-    if (users.some(u => u.employee_id && u.employee_id.toUpperCase() === normalizedEmpId)) {
+    const existingAgent = await prisma.deliveryAgent.findFirst({
+      where: { employeeCode: normalizedEmpId },
+    });
+
+    if (existingAgent) {
       return sendError(res, `Employee ID "${normalizedEmpId}" is already registered in the system.`, 409);
     }
 
     // Check if vehicle number is already assigned to an active delivery agent
-    const existingVehicleAgent = users.find(u => 
-      u.role === 'agent' && 
-      u.status === 'active' && 
-      u.vehicle_number && 
-      u.vehicle_number.toUpperCase().replace(/\s+/g, '') === normalizedVehicle
-    );
-    if (existingVehicleAgent) {
-      return sendError(res, `Vehicle Registration Number "${normalizedVehicle}" is already assigned to active delivery agent ${existingVehicleAgent.full_name}.`, 409);
+    const existingVehicle = await prisma.agentVehicle.findFirst({
+      where: {
+        licensePlate: normalizedVehicle,
+        agent: {
+          employmentStatus: 'ACTIVE',
+        },
+      },
+      include: {
+        agent: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (existingVehicle) {
+      return sendError(res, `Vehicle Registration Number "${normalizedVehicle}" is already assigned to active delivery agent ${existingVehicle.agent.user.fullName}.`, 409);
     }
 
     // 3. Document File Validation & Secure Storage
@@ -199,42 +246,87 @@ export const registerAgent = async (req: Request, res: Response) => {
     // Save strictly to private storage outside of public static assets
     fs.writeFileSync(secureFilePath, fileBuffer);
 
-    // 4. Hash password and save delivery agent record with pending verification
-    const password_hash = await hashPassword(password);
-    const newAgent: User & { password_hash: string } = {
-      id: `usr_agent_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      full_name: full_name.trim(),
-      email: normalizedEmail,
-      company_email: normalizedEmail,
-      employee_id: normalizedEmpId,
-      password_hash,
-      role: 'agent',
-      phone: phone.trim(),
-      address: company_name.trim(),
-      company_name: company_name.trim(),
-      department: department ? department.trim() : undefined,
-      vehicle_number: normalizedVehicle,
-      id_document_path: documentFilename,
-      verification_status: 'pending_verification',
-      status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    // 4. Get courier agent role
+    const agentRole = await prisma.role.findUnique({
+      where: { code: 'COURIER_AGENT' },
+    });
 
-    db.insert('users', newAgent);
+    if (!agentRole) {
+      return sendError(res, 'System configuration error. Please contact support.', 500);
+    }
+
+    // 5. Hash password and save delivery agent record with pending verification
+    const password_hash = await hashPassword(password);
+    
+    const newUser = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        passwordHash: password_hash,
+        fullName: full_name.trim(),
+        phone: phone.trim(),
+        address: company_name.trim(),
+        roleId: agentRole.id,
+        status: 'ACTIVE',
+        isEmailVerified: false,
+      },
+      include: { role: true },
+    });
+
+    // Create delivery agent profile
+    const agentProfile = await prisma.deliveryAgent.create({
+      data: {
+        userId: newUser.id,
+        employeeCode: normalizedEmpId,
+        identityDocumentType: 'COMPANY_ID',
+        identityDocumentNumber: documentFilename,
+        employmentStatus: 'ACTIVE',
+      },
+    });
+
+    // Create agent vehicle record
+    await prisma.agentVehicle.create({
+      data: {
+        agentId: agentProfile.id,
+        vehicleType: 'CARGO_VAN', // Default
+        make: 'Unspecified',
+        model: 'Unspecified',
+        year: new Date().getFullYear(),
+        licensePlate: normalizedVehicle,
+        maxWeightCapacityKg: 500,
+        maxVolumeCapacityCbm: 10,
+        fuelType: 'GASOLINE',
+        insurancePolicyNumber: 'PENDING',
+        insuranceExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+        lastServiceDate: new Date(),
+        nextServiceDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+        isActive: true,
+      },
+    });
+
+    // Set user status to PENDING_VERIFICATION
+    await prisma.user.update({
+      where: { id: newUser.id },
+      data: { status: 'PENDING_VERIFICATION' },
+    });
 
     logActivity(
-      { id: newAgent.id, full_name: newAgent.full_name, role: 'agent' },
+      { id: newUser.id, full_name: newUser.fullName, role: 'agent' },
       'AGENT_REGISTRATION_SUBMITTED',
       'user',
-      newAgent.id,
-      `Delivery agent onboarding application submitted: ${newAgent.full_name} (${normalizedEmpId}) - Vehicle: ${normalizedVehicle}. Pending admin verification.`
+      newUser.id,
+      `Delivery agent onboarding application submitted: ${newUser.fullName} (${normalizedEmpId}) - Vehicle: ${normalizedVehicle}. Pending admin verification.`
     );
 
-    const { password_hash: _, ...safeAgent } = newAgent;
+    const mappedUser = mapPrismaUserToLegacy({
+      ...newUser,
+      deliveryAgentProfile: await prisma.deliveryAgent.findUnique({
+        where: { userId: newUser.id },
+      }),
+    });
+
     return sendSuccess(
       res, 
-      { user: safeAgent }, 
+      { user: mappedUser }, 
       'Delivery Agent registration submitted successfully! Your account is currently in PENDING VERIFICATION status. Once dispatch administration reviews your company ID card and vehicle details, your operational account will be activated.', 
       201
     );
@@ -259,33 +351,43 @@ export const login = async (req: Request, res: Response) => {
     const lowerId = rawIdentifier.toLowerCase();
     const upperId = rawIdentifier.toUpperCase();
 
-    const users = db.getTable('users');
-    const user = users.find((u) => 
-      u.email.toLowerCase() === lowerId ||
-      (u.company_email && u.company_email.toLowerCase() === lowerId) ||
-      (u.employee_id && u.employee_id.toUpperCase() === upperId)
-    );
+    // Search for user in Prisma by email or employee code
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: lowerId },
+          { deliveryAgentProfile: { employeeCode: upperId } },
+        ],
+      },
+      include: {
+        role: true,
+        customerProfile: true,
+        deliveryAgentProfile: true,
+      },
+    });
 
     if (!user) {
       return sendError(res, 'Invalid credentials. Please verify your email or Employee ID and password.', 401);
     }
 
-    if (user.status === 'suspended') {
+    if (user.status === 'SUSPENDED') {
       return sendError(res, 'This account has been suspended by administration. Please contact dispatch support.', 403);
     }
+
+    const mappedUser = mapPrismaUserToLegacy(user);
 
     // PORTAL VALIDATION: Detect wrong portal usage
     // If frontend sends portalType, validate that user's role matches the selected portal
     // EXCEPTION: Admin can login through any portal and will be redirected to admin dashboard
-    if (portalType && user.role !== 'admin') {
-      if (portalType === 'customer' && user.role === 'agent') {
+    if (portalType && mappedUser.role !== 'admin') {
+      if (portalType === 'customer' && mappedUser.role === 'agent') {
         return sendError(
           res,
           'This account belongs to a Delivery Agent account. Please select the "Delivery Agent" portal to sign in.',
           403
         );
       }
-      if (portalType === 'agent' && user.role === 'customer') {
+      if (portalType === 'agent' && mappedUser.role === 'customer') {
         return sendError(
           res,
           'This account belongs to a Customer account. Please select the "Customer / Shipper" portal to sign in.',
@@ -294,16 +396,16 @@ export const login = async (req: Request, res: Response) => {
       }
     }
 
-    // Role-specific verification enforcement
-    if (user.role === 'agent') {
-      if (user.verification_status === 'pending_verification') {
+    // Role-specific verification enforcement for delivery agents
+    if (mappedUser.role === 'agent') {
+      if (user.status === 'PENDING_VERIFICATION') {
         return sendError(
           res, 
           'Your delivery agent account is currently PENDING ADMINISTRATIVE VERIFICATION. Dispatch administration must review your company ID document and vehicle registration before operational access is granted.', 
           403
         );
       }
-      if (user.verification_status === 'rejected') {
+      if (user.status === 'DEACTIVATED') {
         return sendError(
           res, 
           'Your delivery agent application has been rejected by administration. Please contact your dispatch supervisor.', 
@@ -313,7 +415,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Handle Google OAuth users who haven't set a direct password yet
-    if (!user.password_hash || user.password_hash.trim() === '') {
+    if (!user.passwordHash || user.passwordHash.trim() === '') {
       if (password.length < 6) {
         return sendError(
           res,
@@ -322,39 +424,46 @@ export const login = async (req: Request, res: Response) => {
         );
       }
       const newHash = await hashPassword(password);
-      db.update('users', user.id, { password_hash: newHash });
-      user.password_hash = newHash;
+      
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newHash },
+        include: {
+          role: true,
+          customerProfile: true,
+          deliveryAgentProfile: true,
+        },
+      });
 
       logActivity(
-        { id: user.id, full_name: user.full_name, role: user.role },
+        { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
         'PASSWORD_INITIALIZED',
         'user',
-        user.id,
-        `Direct password initialized for user: ${user.email}`
+        mappedUser.id,
+        `Direct password initialized for user: ${mappedUser.email}`
       );
     } else {
-      const isMatch = await comparePassword(password, user.password_hash);
+      const isMatch = await comparePassword(password, user.passwordHash);
       if (!isMatch) {
         return sendError(res, 'Invalid credentials. Please verify your email or Employee ID and password.', 401);
       }
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: mappedUser.id, email: mappedUser.email, role: mappedUser.role },
       config.jwtSecret,
       { expiresIn: '7d' }
     );
 
     logActivity(
-      { id: user.id, full_name: user.full_name, role: user.role },
+      { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
       'USER_LOGIN',
       'user',
-      user.id,
-      `User ${user.full_name} (${user.role}) authenticated successfully via ${portalType || 'unspecified'} portal`
+      mappedUser.id,
+      `User ${mappedUser.full_name} (${mappedUser.role}) authenticated successfully via ${portalType || 'unspecified'} portal`
     );
 
-    const { password_hash: _, ...safeUser } = user;
-    return sendSuccess(res, { token, user: safeUser }, 'Authenticated successfully');
+    return sendSuccess(res, { token, user: mappedUser }, 'Authenticated successfully');
   } catch (error: any) {
     return sendError(res, error.message || 'Login failed', 500);
   }
@@ -375,32 +484,48 @@ export const resetPassword = async (req: Request, res: Response) => {
       return sendError(res, 'Password must be at least 6 characters long', 422);
     }
 
-    const users = db.getTable('users');
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    // Find user in Prisma
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: {
+        role: true,
+        customerProfile: true,
+        deliveryAgentProfile: true,
+      },
+    });
 
     if (!user) {
       return sendError(res, 'No account found with this email address', 404);
     }
 
     const password_hash = await hashPassword(new_password);
-    db.update('users', user.id, { password_hash });
+    
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: password_hash },
+      include: {
+        role: true,
+        customerProfile: true,
+        deliveryAgentProfile: true,
+      },
+    });
 
+    const mappedUser = mapPrismaUserToLegacy(updatedUser);
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: mappedUser.id, email: mappedUser.email, role: mappedUser.role },
       config.jwtSecret,
       { expiresIn: '7d' }
     );
 
     logActivity(
-      { id: user.id, full_name: user.full_name, role: user.role },
+      { id: mappedUser.id, full_name: mappedUser.full_name, role: mappedUser.role as UserRole },
       'PASSWORD_RESET',
       'user',
-      user.id,
-      `User ${user.full_name} (${user.email}) reset account password.`
+      mappedUser.id,
+      `User ${mappedUser.full_name} (${mappedUser.email}) reset account password.`
     );
 
-    const { password_hash: _, ...safeUser } = { ...user, password_hash };
-    return sendSuccess(res, { token, user: safeUser }, 'Password updated successfully! You are now authenticated.');
+    return sendSuccess(res, { token, user: mappedUser }, 'Password updated successfully! You are now authenticated.');
   } catch (error: any) {
     return sendError(res, error.message || 'Password reset failed', 500);
   }
@@ -464,9 +589,9 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
     }
 
     const { full_name, phone, address, password } = req.body;
-    const updates: Partial<User> & { password_hash?: string } = {};
+    const updates: any = {};
 
-    if (full_name) updates.full_name = full_name;
+    if (full_name) updates.fullName = full_name;
     if (phone) updates.phone = phone;
     if (address !== undefined) updates.address = address;
 
@@ -474,12 +599,20 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       if (password.length < 6) {
         return sendError(res, 'Password must be at least 6 characters long', 422);
       }
-      updates.password_hash = await hashPassword(password);
+      updates.passwordHash = await hashPassword(password);
     }
 
-    updates.updated_at = new Date().toISOString();
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: updates,
+      include: {
+        role: true,
+        customerProfile: true,
+        deliveryAgentProfile: true,
+      },
+    });
 
-    const updatedUser = db.update('users', req.user.id, updates);
+    const mappedUser = mapPrismaUserToLegacy(updatedUser);
 
     logActivity(
       { id: req.user.id, full_name: req.user.full_name, role: req.user.role },
@@ -489,8 +622,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       `User ${req.user.full_name} updated account details.`
     );
 
-    const { password_hash: _, ...safeUser } = updatedUser;
-    return sendSuccess(res, safeUser, 'Profile updated successfully');
+    return sendSuccess(res, mappedUser, 'Profile updated successfully');
   } catch (error: any) {
     return sendError(res, error.message || 'Failed to update profile', 500);
   }

@@ -1,0 +1,38 @@
+# SWIFTRoute Microservice Dockerfile Template
+# This template can be copied to each service directory
+# Replace SERVICE_NAME and PORT with actual values
+
+FROM node:18-alpine AS base
+WORKDIR /app
+
+# Install dependencies for Prisma
+RUN apk add --no-cache openssl
+
+# Copy package files
+COPY package*.json ./
+
+# Copy Prisma schema from root (adjust path if needed)
+COPY ../../prisma ./prisma/
+
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Copy application code
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Expose port (change per service)
+EXPOSE PORT
+
+# Health check (change per service port)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
+  CMD node -e "require('http').get('http://localhost:PORT/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+
+# Start the service
+CMD ["npm", "start"]
